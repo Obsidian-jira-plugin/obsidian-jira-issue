@@ -1,7 +1,7 @@
 jest.mock('obsidian')
 jest.mock('../src/client/jiraClient')
 
-import { EAuthenticationTypes, EColorSchema, IJiraIssueSettings } from "../src/interfaces/settingsInterfaces"
+import { EAuthenticationTypes, EColorSchema, ECredentialStorageType, IJiraIssueSettings } from "../src/interfaces/settingsInterfaces"
 import { DEFAULT_ACCOUNT, DEFAULT_SETTINGS, JiraIssueSettingTab, SettingsData } from "../src/settings"
 
 function deepCopy(obj: any): any {
@@ -50,9 +50,12 @@ describe('Settings', () => {
         await settingTab.loadSettings()
         expect(pluginMock.loadData).toBeCalledTimes(1)
         expect(pluginMock.saveData).toBeCalledTimes(1)
-        expect(pluginMock.saveData.mock.calls[0][0]).toEqual({
+        const saved = pluginMock.saveData.mock.calls[0][0]
+        expect(saved.accounts[0].id).toBeDefined()
+        expect(saved).toEqual({
             ...DEFAULT_SETTINGS,
-            accounts: [DEFAULT_ACCOUNT],
+            credentialStorageType: ECredentialStorageType.PLAINTEXT,
+            accounts: [{ ...DEFAULT_ACCOUNT, id: expect.any(String) }],
             customFieldsIdToName: null,
             customFieldsNameToId: null,
             jqlAutocomplete: null,
@@ -60,7 +63,8 @@ describe('Settings', () => {
         })
         expect(SettingsData).toEqual({
             ...DEFAULT_SETTINGS,
-            accounts: [DEFAULT_ACCOUNT],
+            credentialStorageType: ECredentialStorageType.PLAINTEXT,
+            accounts: [{ ...DEFAULT_ACCOUNT, id: expect.any(String) }],
         })
     })
     test('loadSettings valid full settings', async () => {
@@ -70,8 +74,10 @@ describe('Settings', () => {
         expect(pluginMock.saveData).toBeCalledTimes(0)
         expect(SettingsData).toEqual({
             ...StoredSettings,
+            credentialStorageType: ECredentialStorageType.PLAINTEXT,
             accounts: [{
                 ...StoredSettings.accounts[0],
+                id: expect.any(String),
                 priority: 1,
                 "cache": {
                     "customFieldsIdToName": {},

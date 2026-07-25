@@ -1,5 +1,16 @@
 import { IJiraAutocompleteDataField, IJiraFieldSchema } from "./issueInterfaces"
 
+export enum ECredentialStorageType {
+    KEYCHAIN = 'KEYCHAIN',
+    PASSPHRASE = 'PASSPHRASE',
+    PLAINTEXT = 'PLAINTEXT',
+}
+export const CREDENTIAL_STORAGE_TYPE_DESCRIPTION = {
+    [ECredentialStorageType.KEYCHAIN]: 'OS Keychain (SecretStorage)',
+    [ECredentialStorageType.PASSPHRASE]: 'Master Passphrase (AES-256-GCM)',
+    [ECredentialStorageType.PLAINTEXT]: 'Plaintext (data.json)',
+}
+
 export enum EAuthenticationTypes {
     OPEN = 'OPEN',
     BASIC = 'BASIC',
@@ -38,6 +49,7 @@ export interface IJiraIssueSettings {
     logImagesFetch: boolean
     showColorBand: boolean
     showJiraLink: boolean
+    credentialStorageType: ECredentialStorageType
 
     // Legacy credentials
     host?: string
@@ -48,12 +60,15 @@ export interface IJiraIssueSettings {
 }
 
 export interface IJiraIssueAccountSettings {
+    id?: string
     alias: string
     host: string
     authenticationType: EAuthenticationTypes
     username?: string
     password?: string
     bareToken?: string
+    encryptedPassword?: string
+    encryptedBareToken?: string
     priority: number
     color: string
     use2025Api: boolean

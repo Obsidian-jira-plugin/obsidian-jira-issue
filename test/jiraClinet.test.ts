@@ -65,8 +65,8 @@ describe('JiraClient', () => {
             SettingsData.accounts = [TestAccountOpen]
             requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: [] } as any)
             await JiraClient.updateCustomFieldsCache()
-            expect(TestAccountOpen.cache.customFieldsNameToId['EPIC NAME']).toEqual('VIRTUAL_EPIC_NAME')
-            expect(TestAccountOpen.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME']).toEqual('EPIC NAME')
+            expect((TestAccountOpen.cache.customFieldsNameToId as any)['EPIC NAME']).toEqual('VIRTUAL_EPIC_NAME')
+            expect((TestAccountOpen.cache.customFieldsIdToName as any)['VIRTUAL_EPIC_NAME']).toEqual('EPIC NAME')
         })
     test.todo('getLoggedUser')
     test.todo('getDevStatus')

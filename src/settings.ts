@@ -1,8 +1,17 @@
 import { App, Notice, PluginSettingTab, Setting, TextComponent } from 'obsidian'
 import JiraClient from './client/jiraClient'
-import { COLOR_SCHEMA_DESCRIPTION, EAuthenticationTypes, EColorSchema, ESearchColumnsTypes, IJiraIssueAccountSettings, IJiraIssueSettings, SEARCH_COLUMNS_DESCRIPTION } from './interfaces/settingsInterfaces'
+import { COLOR_SCHEMA_DESCRIPTION, CREDENTIAL_STORAGE_TYPE_DESCRIPTION, EAuthenticationTypes, EColorSchema, ECredentialStorageType, ESearchColumnsTypes, IJiraIssueAccountSettings, IJiraIssueSettings, SEARCH_COLUMNS_DESCRIPTION } from './interfaces/settingsInterfaces'
 import JiraIssuePlugin from './main'
 import { getRandomHexColor } from './utils'
+import { isSecretStorageAvailable, loadAccountSecrets, saveAccountSecrets, deleteAccountSecrets } from './secretStorage'
+import { decryptSecret, encryptSecret } from './crypto/encryption'
+import { UnlockModal } from './modals/unlockModal'
+
+export let MasterPassphraseSession: string | null = null
+
+export function setMasterPassphraseSession(passphrase: string | null) {
+    MasterPassphraseSession = passphrase
+}
 
 const AUTHENTICATION_TYPE_DESCRIPTION = {
     [EAuthenticationTypes.OPEN]: 'Open',
@@ -24,6 +33,7 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     inlineIssuePrefix: 'JIRA:',
     showColorBand: true,
     showJiraLink: true,
+    credentialStorageType: ECredentialStorageType.KEYCHAIN,
     searchColumns: [
         { type: ESearchColumnsTypes.KEY, compact: false },
         { type: ESearchColumnsTypes.SUMMARY, compact: false },
@@ -39,7 +49,12 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     logImagesFetch: false,
 }
 
+function generateAccountId(): string {
+    return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11)
+}
+
 export const DEFAULT_ACCOUNT: IJiraIssueAccountSettings = {
+    id: '',
     alias: 'Default',
     host: 'https://mycompany.atlassian.net',
     authenticationType: EAuthenticationTypes.OPEN,
@@ -75,10 +90,22 @@ export class JiraIssueSettingTab extends PluginSettingTab {
     }
 
     async loadSettings(): Promise<void> {
+        const storedData = (await this._plugin.loadData()) || {}
         // Read plugin data and fill new fields with default values
-        Object.assign(SettingsData, DEFAULT_SETTINGS, await this._plugin.loadData())
+        Object.assign(SettingsData, DEFAULT_SETTINGS, storedData)
+
+        // Ensure default credentialStorageType if not present
+        if (!storedData.credentialStorageType) {
+            SettingsData.credentialStorageType = isSecretStorageAvailable(this.app)
+                ? ECredentialStorageType.KEYCHAIN
+                : ECredentialStorageType.PLAINTEXT
+        }
+
         for (const i in SettingsData.accounts) {
             SettingsData.accounts[i] = Object.assign({}, DEFAULT_ACCOUNT, SettingsData.accounts[i])
+            if (!SettingsData.accounts[i].id) {
+                SettingsData.accounts[i].id = generateAccountId()
+            }
         }
         SettingsData.cache = deepCopy(DEFAULT_SETTINGS.cache)
 
@@ -87,6 +114,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 // Legacy credentials migration
                 SettingsData.accounts = [
                     {
+                        id: generateAccountId(),
                         priority: 1,
                         host: SettingsData.host,
                         authenticationType: SettingsData.authenticationType,
@@ -101,11 +129,65 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 ]
             } else {
                 // First installation
-                SettingsData.accounts = [DEFAULT_ACCOUNT]
+                const defaultAcc = Object.assign({}, DEFAULT_ACCOUNT, { id: generateAccountId() })
+                SettingsData.accounts = [defaultAcc]
             }
-            this.saveSettings()
+            await this.saveSettings()
         }
+
+        // Handle Credential Storage
+        if (SettingsData.credentialStorageType === ECredentialStorageType.KEYCHAIN && isSecretStorageAvailable(this.app)) {
+            let needsSave = false
+            for (const account of SettingsData.accounts) {
+                const rawAccountData = storedData.accounts ? storedData.accounts.find((a: any) => a.alias === account.alias || a.id === account.id) : null
+                if (rawAccountData && (rawAccountData.password || rawAccountData.bareToken)) {
+                    // Migrate legacy plaintext in data.json to SecretStorage
+                    account.password = rawAccountData.password || account.password
+                    account.bareToken = rawAccountData.bareToken || account.bareToken
+                    await saveAccountSecrets(this.app, account)
+                    needsSave = true
+                }
+                const secrets = await loadAccountSecrets(this.app, account)
+                if (secrets.password !== undefined) account.password = secrets.password
+                if (secrets.bareToken !== undefined) account.bareToken = secrets.bareToken
+            }
+            if (needsSave) {
+                await this.saveSettings()
+            }
+        } else if (SettingsData.credentialStorageType === ECredentialStorageType.PASSPHRASE) {
+            const hasEncryptedSecrets = SettingsData.accounts.some(a => a.encryptedPassword || a.encryptedBareToken)
+            if (hasEncryptedSecrets) {
+                if (MasterPassphraseSession) {
+                    await this.decryptAccountsWithPassphrase(MasterPassphraseSession)
+                } else {
+                    new UnlockModal(this.app, async (passphrase) => {
+                        MasterPassphraseSession = passphrase
+                        await this.decryptAccountsWithPassphrase(passphrase)
+                    }).open()
+                }
+            }
+        }
+
         this.accountsConflictsFix()
+    }
+
+    private async decryptAccountsWithPassphrase(passphrase: string) {
+        for (const account of SettingsData.accounts) {
+            if (account.encryptedPassword) {
+                try {
+                    account.password = await decryptSecret(passphrase, account.encryptedPassword)
+                } catch (e) {
+                    new Notice('Jira Issue: Failed to decrypt password. Check Master Passphrase.')
+                }
+            }
+            if (account.encryptedBareToken) {
+                try {
+                    account.bareToken = await decryptSecret(passphrase, account.encryptedBareToken)
+                } catch (e) {
+                    new Notice('Jira Issue: Failed to decrypt token. Check Master Passphrase.')
+                }
+            }
+        }
     }
 
     async saveSettings() {
@@ -114,7 +196,50 @@ export class JiraIssueSettingTab extends PluginSettingTab {
             cache: DEFAULT_SETTINGS.cache, jqlAutocomplete: null, customFieldsIdToName: null, customFieldsNameToId: null, statusColorCache: null
         })
         // Account cache settings cleanup
+        settingsToStore.accounts = deepCopy(SettingsData.accounts)
         settingsToStore.accounts.forEach(account => account.cache = DEFAULT_ACCOUNT.cache)
+
+        if (SettingsData.credentialStorageType === ECredentialStorageType.KEYCHAIN && isSecretStorageAvailable(this.app)) {
+            for (const account of SettingsData.accounts) {
+                await saveAccountSecrets(this.app, account)
+            }
+            // Strip raw secrets from data.json
+            for (const account of settingsToStore.accounts) {
+                delete account.password
+                delete account.bareToken
+                delete account.encryptedPassword
+                delete account.encryptedBareToken
+            }
+        } else if (SettingsData.credentialStorageType === ECredentialStorageType.PASSPHRASE) {
+            if (isSecretStorageAvailable(this.app)) {
+                for (const account of SettingsData.accounts) {
+                    await deleteAccountSecrets(this.app, account)
+                }
+            }
+            if (MasterPassphraseSession) {
+                for (const account of settingsToStore.accounts) {
+                    if (account.password) {
+                        account.encryptedPassword = await encryptSecret(MasterPassphraseSession, account.password)
+                    }
+                    if (account.bareToken) {
+                        account.encryptedBareToken = await encryptSecret(MasterPassphraseSession, account.bareToken)
+                    }
+                    delete account.password
+                    delete account.bareToken
+                }
+            }
+        } else if (SettingsData.credentialStorageType === ECredentialStorageType.PLAINTEXT) {
+            if (isSecretStorageAvailable(this.app)) {
+                for (const account of SettingsData.accounts) {
+                    await deleteAccountSecrets(this.app, account)
+                }
+            }
+            for (const account of settingsToStore.accounts) {
+                delete account.encryptedPassword
+                delete account.encryptedBareToken
+            }
+        }
+
         // Delete old properties
         delete (settingsToStore as any)['darkMode']
         delete (settingsToStore as any)['host']
@@ -206,6 +331,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     .setTooltip('Delete')
                     .setDisabled(SettingsData.accounts.length <= 1)
                     .onClick(async () => {
+                        await deleteAccountSecrets(this.app, account)
                         SettingsData.accounts.remove(account)
                         this.accountsConflictsFix()
                         await this.saveSettings()
@@ -602,6 +728,38 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
     displayExtraSettings() {
         const { containerEl } = this
+
+        containerEl.createEl('h3', { text: 'Security' })
+        const secretStorageAvailable = isSecretStorageAvailable(this.app)
+        new Setting(containerEl)
+            .setName('Credential storage method')
+            .setDesc(secretStorageAvailable
+                ? 'Choose how passwords and tokens are stored securely.'
+                : 'OS Keychain is not supported on this platform/version. Master Passphrase or Plaintext can be used.')
+            .addDropdown(dropdown => dropdown
+                .addOptions(CREDENTIAL_STORAGE_TYPE_DESCRIPTION)
+                .setValue(SettingsData.credentialStorageType)
+                .onChange(async value => {
+                    const newType = value as ECredentialStorageType
+                    if (newType === ECredentialStorageType.KEYCHAIN && !secretStorageAvailable) {
+                        new Notice('OS Keychain (SecretStorage) is not supported on this platform/version.')
+                        dropdown.setValue(SettingsData.credentialStorageType)
+                        return
+                    }
+                    if (newType === ECredentialStorageType.PASSPHRASE && !MasterPassphraseSession) {
+                        new UnlockModal(this.app, async (passphrase) => {
+                            MasterPassphraseSession = passphrase
+                            SettingsData.credentialStorageType = newType
+                            await this.saveSettings()
+                            new Notice('Credential storage set to Master Passphrase.')
+                        }).open()
+                    } else {
+                        SettingsData.credentialStorageType = newType
+                        await this.saveSettings()
+                        new Notice(`Credential storage set to ${CREDENTIAL_STORAGE_TYPE_DESCRIPTION[newType]}.`)
+                    }
+                }))
+
         containerEl.createEl('h3', { text: 'Cache' })
 
         new Setting(containerEl)
@@ -638,6 +796,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
     createNewEmptyAccount() {
         const newAccount = JSON.parse(JSON.stringify(DEFAULT_ACCOUNT))
+        newAccount.id = generateAccountId()
         newAccount.priority = SettingsData.accounts.length + 1
         this.accountsConflictsFix()
         return newAccount
