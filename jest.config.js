@@ -10,5 +10,8 @@ module.exports = {
     'node_modules',
     'src',
     'test',
+  ],
+  transformIgnorePatterns: [
+    'node_modules/(?!(escape-string-regexp)/)'
   ]
 }

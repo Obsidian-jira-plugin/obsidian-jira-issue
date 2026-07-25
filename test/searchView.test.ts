@@ -1,5 +1,5 @@
 jest.mock('../src/settings', () => {
-    return { SettingsData: { cache: { columns: ['CUSTOM1', '12345'] } } }
+    return { SettingsData: { cache: { columns: ['CUSTOM1', '12345', 'EPIC NAME'] } } }
 })
 jest.mock('../src/utils', () => { return { getAccountByAlias: jest.fn() } })
 

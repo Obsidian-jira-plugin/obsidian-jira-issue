@@ -243,7 +243,8 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
                 createEl('td', { text: issue.fields.progress.percent.toString() + '%', parent: row })
                 break
             case ESearchColumnsTypes.CUSTOM_FIELD:
-                createEl('td', { text: renderCustomField(issue, column.extra), parent: row })
+                const customCell = createEl('td', { parent: row })
+                renderCustomFieldCell(issue, column.extra, customCell)
                 break
             case ESearchColumnsTypes.NOTES:
                 if (!markdownNotes) {
@@ -328,13 +329,44 @@ function renderNoteFrontMatter(column: ISearchColumn, note: TFile, noteCell: HTM
     }
 }
 
-function renderCustomField(issue: IJiraIssue, customField: string): string {
-    if (!Number(customField)) {
-        customField = issue.account.cache.customFieldsNameToId[customField]
+function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement): void {
+    const rawField = customField
+    if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
+        customField = issue.account.cache.customFieldsNameToId[customField] || customField
+    }
+    if (customField === 'VIRTUAL_EPIC_NAME' || ['EPIC NAME', 'EPIC LINK', 'EPIC_NAME', 'EPIC_LINK'].includes(rawField.toUpperCase())) {
+        if (issue.fields?.parent) {
+            const parentKey = issue.fields.parent.key
+            const parentSummary = issue.fields.parent.fields?.summary
+            const displayText = parentKey ? (parentSummary ? `${parentKey}: ${parentSummary}` : parentKey) : (parentSummary || '')
+            let parentTitle = parentKey
+            if (parentSummary) {
+                parentTitle += ': ' + parentSummary
+            }
+            if (parentKey && issue.account) {
+                createEl('a', {
+                    href: RC.issueUrl(issue.account, parentKey),
+                    text: displayText,
+                    title: parentTitle,
+                    parent: cell
+                })
+                return
+            } else {
+                cell.setText(displayText)
+                return
+            }
+        }
+        cell.setText('')
+        return
     }
     const value = issue.fields[`customfield_${customField}`]
-    if (typeof value === 'string' || typeof value === 'number') {
-        return value.toString()
+    if (value === undefined || value === null) {
+        cell.setText('')
+        return
     }
-    return JSON.stringify(value)
+    if (typeof value === 'string' || typeof value === 'number') {
+        cell.setText(value.toString())
+        return
+    }
+    cell.setText(JSON.stringify(value))
 }
