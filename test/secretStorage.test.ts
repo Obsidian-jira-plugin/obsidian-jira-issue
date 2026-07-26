@@ -57,10 +57,10 @@ describe('SecretStorage Helper', () => {
 
     test('getAccountSecretKey generates key using account.id', () => {
         expect(getAccountSecretKey(sampleAccount, 'password')).toEqual(
-            'obsidian-jira-issue:account:acc-123:password'
+            'jira-issue-acc-123-password'
         )
         expect(getAccountSecretKey(sampleAccount, 'bareToken')).toEqual(
-            'obsidian-jira-issue:account:acc-123:bareToken'
+            'jira-issue-acc-123-baretoken'
         )
     })
 

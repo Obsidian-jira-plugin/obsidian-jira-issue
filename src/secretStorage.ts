@@ -6,8 +6,12 @@ export function isSecretStorageAvailable(app: App): boolean {
 }
 
 export function getAccountSecretKey(account: IJiraIssueAccountSettings, secretType: 'password' | 'bareToken'): string {
-    const keyId = account.id || account.alias
-    return `obsidian-jira-issue:account:${keyId}:${secretType}`
+    const rawId = (account.id || account.alias).toLowerCase().replace(/[^a-z0-9-]/g, '-')
+    const type = secretType.toLowerCase()
+    const prefix = 'jira-issue-'
+    const maxRawIdLen = 64 - prefix.length - 1 - type.length
+    const truncatedId = rawId.length > maxRawIdLen ? rawId.substring(0, maxRawIdLen) : rawId
+    return `${prefix}${truncatedId}-${type}`
 }
 
 export async function saveAccountSecrets(app: App, account: IJiraIssueAccountSettings): Promise<void> {
