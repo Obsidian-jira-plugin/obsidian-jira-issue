@@ -5,6 +5,7 @@ import * as jsonpath from 'jsonpath'
 import ObjectsCache from "../objectsCache"
 import JiraClient from "../client/jiraClient"
 import { AVATAR_RESOLUTION, ESearchColumnsTypes, ISearchColumn } from "../interfaces/settingsInterfaces"
+import { getIssue } from "../api/apiBase"
 
 const DESCRIPTION_COMPACT_MAX_LENGTH = 20
 
@@ -244,7 +245,7 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
                 break
             case ESearchColumnsTypes.CUSTOM_FIELD:
                 const customCell = createEl('td', { parent: row })
-                renderCustomFieldCell(issue, column.extra, customCell)
+                await renderCustomFieldCell(issue, column.extra, customCell)
                 break
             case ESearchColumnsTypes.NOTES:
                 if (!markdownNotes) {
@@ -329,17 +330,167 @@ function renderNoteFrontMatter(column: ISearchColumn, note: TFile, noteCell: HTM
     }
 }
 
-function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement): void {
+const JIRA_EPIC_COLORS = [
+    '#6554c0', // Purple
+    '#0052cc', // Blue
+    '#00875a', // Green
+    '#ff5630', // Orange
+    '#00b8d9', // Cyan
+    '#ffab00', // Yellow
+    '#e91e63', // Pink
+    '#36b37e', // Teal
+]
+
+function getEpicColor(key: string): string {
+    let hash = 0
+    for (let i = 0; i < key.length; i++) {
+        hash = key.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    const index = Math.abs(hash) % JIRA_EPIC_COLORS.length
+    return JIRA_EPIC_COLORS[index]
+}
+
+async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?: string; summary?: string; isParentFallback?: boolean } | null> {
+    if (!issue || !issue.fields || depth > 3) {
+        return null
+    }
+
+    // 1. Check legacy Jira Server/Data Center customfield by ID if mapped
+    const customEpicFieldId = issue.account?.cache?.customFieldsNameToId['EPIC LINK'] || 
+                              issue.account?.cache?.customFieldsNameToId['Epic Link']
+    if (customEpicFieldId && customEpicFieldId !== 'VIRTUAL_EPIC_NAME' && issue.fields[`customfield_${customEpicFieldId}`]) {
+        const epicVal = issue.fields[`customfield_${customEpicFieldId}`]
+        if (typeof epicVal === 'string') {
+            try {
+                const epicIssue = await getIssue(epicVal, { fields: ['*all'], account: issue.account })
+                return { key: epicVal, summary: epicIssue?.fields?.summary || epicVal }
+            } catch (e) {
+                return { key: epicVal }
+            }
+        }
+    }
+
+    // 2. Check Jira Cloud Next-Gen / Team-managed issue.fields.epic
+    if (issue.fields.epic && (issue.fields.epic.key || issue.fields.epic.name || issue.fields.epic.summary)) {
+        return {
+            key: issue.fields.epic.key || issue.fields.epic.id,
+            summary: issue.fields.epic.summary || issue.fields.epic.name
+        }
+    }
+
+    // 3. Check Jira Cloud parent hierarchy (Company-managed projects)
+    if (issue.fields.parent && issue.fields.parent.key) {
+        const parent = issue.fields.parent
+
+        const isSubtask = issue.fields.issuetype?.subtask === true || 
+                          (issue.fields.issuetype?.name && issue.fields.issuetype.name.toLowerCase().includes('sub'))
+
+        if (isSubtask) {
+            // Sub-task: check if parent already has nested grandparent (the Epic)
+            if (parent.fields?.parent?.key) {
+                const grandParent = parent.fields.parent
+                return { key: grandParent.key, summary: grandParent.fields?.summary }
+            }
+            // Fetch parent Story/Task details (cached in ObjectsCache) and recursively resolve its Epic
+            try {
+                const parentStory = await getIssue(parent.key, { fields: ['*all'], account: issue.account })
+                if (parentStory) {
+                    const parentEpic = await resolveEpic(parentStory, depth + 1)
+                    if (parentEpic && !parentEpic.isParentFallback) {
+                        return parentEpic
+                    }
+                }
+            } catch (e) {
+                // Ignore fetch error
+            }
+            // Fallback for Sub-task: return parent Story/Task if no Epic was found
+            return { key: parent.key, summary: parent.fields?.summary, isParentFallback: true }
+        } else {
+            // Story / Task / Bug: parent IS the Epic!
+            return { key: parent.key, summary: parent.fields?.summary }
+        }
+    }
+
+    // 4. Scan all customfields for any Epic key or Epic object (Fallback for unmapped Jira Server / Data Center)
+    for (const [key, val] of Object.entries(issue.fields)) {
+        if (!key.startsWith('customfield_') || !val) continue
+
+        if (typeof val === 'string' && /^[A-Za-z0-9_]+-\d+$/.test(val.trim())) {
+            const epicKey = val.trim()
+            try {
+                const fetchedEpic = await getIssue(epicKey, { fields: ['*all'], account: issue.account })
+                if (fetchedEpic && fetchedEpic.fields) {
+                    return { key: epicKey, summary: fetchedEpic.fields.summary || epicKey }
+                }
+            } catch (e) {
+                return { key: epicKey }
+            }
+        }
+
+        if (typeof val === 'object' && val !== null && (val as any).key) {
+            const obj = val as any
+            if (typeof obj.key === 'string' && /^[A-Za-z0-9_]+-\d+$/.test(obj.key)) {
+                return { key: obj.key, summary: obj.summary || obj.name || obj.key }
+            }
+        }
+    }
+
+    return null
+}
+
+async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement): Promise<void> {
     const rawField = customField
     if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
         customField = issue.account.cache.customFieldsNameToId[customField] || customField
     }
-    if (customField === 'VIRTUAL_EPIC_NAME' || ['EPIC NAME', 'EPIC LINK', 'EPIC_NAME', 'EPIC_LINK'].includes(rawField.toUpperCase())) {
+
+    const fieldUpper = rawField.toUpperCase()
+
+    // 1. Epic Link / Epic Name virtual column
+    if (customField === 'VIRTUAL_EPIC_NAME' || ['EPIC NAME', 'EPIC LINK', 'EPIC_NAME', 'EPIC_LINK'].includes(fieldUpper)) {
+        const epic = await resolveEpic(issue)
+        if (epic && (epic.key || epic.summary)) {
+            const epicKey = epic.key
+            const epicSummary = epic.summary
+            const displayText = epicKey ? (epicSummary ? `${epicKey}: ${epicSummary}` : epicKey) : (epicSummary || '')
+            let epicTitle = epicKey || ''
+            if (epicSummary) {
+                epicTitle += epicTitle ? ': ' + epicSummary : epicSummary
+            }
+
+            const badgeColor = epic.isParentFallback ? '#4c9aff' : getEpicColor(epicKey || 'EPIC')
+            const linkStyle = `background-color: ${badgeColor}; color: #ffffff !important; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600; text-decoration: none; display: inline-block; white-space: normal; word-break: break-word;`
+
+            if (epicKey && issue.account) {
+                createEl('a', {
+                    href: RC.issueUrl(issue.account, epicKey),
+                    text: displayText,
+                    title: epicTitle,
+                    attr: { style: linkStyle },
+                    parent: cell
+                })
+                return
+            } else if (displayText) {
+                createEl('span', {
+                    text: displayText,
+                    title: epicTitle,
+                    attr: { style: linkStyle },
+                    parent: cell
+                })
+                return
+            }
+        }
+        cell.setText('')
+        return
+    }
+
+    // 2. Parent / Parent Link virtual column (immediate parent task/story)
+    if (customField === 'VIRTUAL_PARENT' || ['PARENT', 'PARENT LINK', 'PARENT_LINK', 'PARENT NAME', 'PARENT_NAME'].includes(fieldUpper)) {
         if (issue.fields?.parent) {
             const parentKey = issue.fields.parent.key
             const parentSummary = issue.fields.parent.fields?.summary
             const displayText = parentKey ? (parentSummary ? `${parentKey}: ${parentSummary}` : parentKey) : (parentSummary || '')
-            let parentTitle = parentKey
+            let parentTitle = parentKey || ''
             if (parentSummary) {
                 parentTitle += ': ' + parentSummary
             }

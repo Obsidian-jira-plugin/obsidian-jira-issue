@@ -212,7 +212,7 @@ export default {
 
     async getIssue(issueKey: string, options: { fields?: string[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraIssue> {
         const opt = {
-            fields: options.fields || [],
+            fields: (options.fields && options.fields.length > 0) ? options.fields : ['*all'],
             account: options.account || null,
         }
         const queryParameters = new URLSearchParams({
@@ -302,12 +302,18 @@ export default {
                         SettingsData.cache.columns.push(field.schema.customId.toString(), field.name.toUpperCase())
                     }
                 }
-                // Virtual field mapping for deprecated Epic fields
-                account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
-                account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
-                account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
-                account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
+                // Virtual field mapping for deprecated Epic fields and Parent fields (only if not provided by Jira server)
+                if (!account.cache.customFieldsNameToId['EPIC NAME']) account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
+                if (!account.cache.customFieldsNameToId['Epic Name']) account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
+                if (!account.cache.customFieldsNameToId['EPIC LINK']) account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
+                if (!account.cache.customFieldsNameToId['Epic Link']) account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
                 account.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
+
+                if (!account.cache.customFieldsNameToId['PARENT']) account.cache.customFieldsNameToId['PARENT'] = 'VIRTUAL_PARENT'
+                if (!account.cache.customFieldsNameToId['Parent']) account.cache.customFieldsNameToId['Parent'] = 'VIRTUAL_PARENT'
+                if (!account.cache.customFieldsNameToId['PARENT LINK']) account.cache.customFieldsNameToId['PARENT LINK'] = 'VIRTUAL_PARENT'
+                if (!account.cache.customFieldsNameToId['Parent Link']) account.cache.customFieldsNameToId['Parent Link'] = 'VIRTUAL_PARENT'
+                account.cache.customFieldsIdToName['VIRTUAL_PARENT'] = 'PARENT'
             } catch (e) {
                 console.error('Error while retrieving custom fields list of account:', account.alias, e)
             }
@@ -317,6 +323,12 @@ export default {
         }
         if (SettingsData.cache.columns.indexOf('EPIC LINK') === -1) {
             SettingsData.cache.columns.push('EPIC LINK')
+        }
+        if (SettingsData.cache.columns.indexOf('PARENT') === -1) {
+            SettingsData.cache.columns.push('PARENT')
+        }
+        if (SettingsData.cache.columns.indexOf('PARENT LINK') === -1) {
+            SettingsData.cache.columns.push('PARENT LINK')
         }
     },
 
