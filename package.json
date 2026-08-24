@@ -15,7 +15,7 @@
         "Jira",
         "Atlassian"
     ],
-    "author": "marc0l92",
+    "author": "Obsidian-jira-plugin Community (originally by marc0l92)",
     "license": "AGPL-3.0-or-later",
     "devDependencies": {
         "@types/jest": "^29.5.14",

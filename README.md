@@ -1,6 +1,10 @@
 # Obsidian jira-issue
-![Test Status](https://github.com/marc0l92/obsidian-jira-issue/actions/workflows/ci.yaml/badge.svg)
+![Test Status](https://github.com/Obsidian-jira-plugin/obsidian-jira-issue/actions/workflows/ci.yaml/badge.svg)
 
+> ### 📢 Maintenance & Acknowledgement
+> This plugin was originally created and maintained by [**@marc0l92**](https://github.com/marc0l92), to whom the community is deeply grateful.
+> 
+> It is now actively maintained and updated by the **[Obsidian-jira-plugin](https://github.com/Obsidian-jira-plugin)** community team.
 
 This plugin allows you to track the progress of [Atlassian Jira](https://www.atlassian.com/software/jira) issues from your [Obsidian.md](https://obsidian.md/) notes.
 
@@ -11,25 +15,25 @@ This plugin allows you to track the progress of [Atlassian Jira](https://www.atl
 ![searchResults](./assets/searchResults2.png)
 
 ## Documentation
-Check out the complete [documentation](https://marc0l92.github.io/obsidian-jira-issue) to start using Jira-Issue.
+Check out the complete [documentation](https://obsidian-jira-plugin.github.io/obsidian-jira-issue) to start using Jira-Issue.
 
 ## Installation
 From the obsidian app go in `Settings > Third-party plugins > Community Plugins > Browse` and search for `jira-issue`.
 
-[Read more...](https://marc0l92.github.io/obsidian-jira-issue/docs/get-started/installation)
+[Read more...](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/get-started/installation)
 
 ## Configuration
 
 Use the plugin options to configure the connection to your Atlassian Jira server: host, username and password.
 
-[Read more...](https://marc0l92.github.io/obsidian-jira-issue/docs/get-started/basic-authentication)
+[Read more...](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/get-started/basic-authentication)
 
 ## Markdown Syntax
 
 The plugin support the following components:
 
 ### 📃`jira-issue`:
-- [Documentation](https://marc0l92.github.io/obsidian-jira-issue/docs/components/jira-issue)
+- [Documentation](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/components/jira-issue)
 - Example:
 ````
 ```jira-issue
@@ -41,7 +45,7 @@ https://my.jira-server.com/browse/BBB-333
 ````
 
 ### 🔎`jira-search`
-- [Documentation](https://marc0l92.github.io/obsidian-jira-issue/docs/components/jira-search)
+- [Documentation](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/components/jira-search)
 - Simple example:
 ````
 ```jira-search
@@ -59,7 +63,7 @@ columns: KEY, SUMMARY, -ASSIGNEE, -REPORTER, STATUS, NOTES
 ````
 
 ### 🔢`jira-count`
-- [Documentation](https://marc0l92.github.io/obsidian-jira-issue/docs/components/jira-count)
+- [Documentation](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/components/jira-count)
 - Example:
 ````
 ```jira-count
@@ -68,7 +72,7 @@ project = REF AND status changed to (Done, "Won't Fix", Archived, "Can't Reprodu
 ````
 
 ### 🏷️Inline issues
-- [Documentation](https://marc0l92.github.io/obsidian-jira-issue/docs/components/inline-issue)
+- [Documentation](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/components/inline-issue)
 - Example:
 ````
 With inline issue you can insert an issue like JIRA:OPEN-351 inside your text.
@@ -91,4 +95,4 @@ Pull requests are welcome.
 
 ## License
 
-Jira-Issue is licensed under the GNU AGPLv3 license. Refer to [LICENSE](https://github.com/marc0l92/obsidian-jira-issue/blob/master/LICENSE) for more information.
+Jira-Issue is licensed under the GNU AGPLv3 license. Refer to [LICENSE](https://github.com/Obsidian-jira-plugin/obsidian-jira-issue/blob/master/LICENSE) for more information.

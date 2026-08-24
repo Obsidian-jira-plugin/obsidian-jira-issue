@@ -8,7 +8,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula')
 const config = {
   title: 'Obsidian Jira Issue',
   tagline: 'Track the progress of Atlassian Jira issues from your Obsidian notes',
-  url: 'https://marc0l92.github.io',
+  url: 'https://obsidian-jira-plugin.github.io',
   trailingSlash: false,
   baseUrl: '/obsidian-jira-issue/',
   onBrokenLinks: 'throw',
@@ -17,7 +17,7 @@ const config = {
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'marc0l92', // Usually your GitHub org/user name.
+  organizationName: 'Obsidian-jira-plugin', // Usually your GitHub org/user name.
   projectName: 'obsidian-jira-issue', // Usually your repo name.
 
   // Even if you don't use internalization, you can use this field to set useful
@@ -83,7 +83,7 @@ const config = {
             position: 'right',
           },
           {
-            href: 'https://github.com/marc0l92/obsidian-jira-issue',
+            href: 'https://github.com/Obsidian-jira-plugin/obsidian-jira-issue',
             label: 'GitHub',
             position: 'right',
           },
