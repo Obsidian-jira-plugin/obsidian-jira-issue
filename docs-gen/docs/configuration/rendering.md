@@ -47,3 +47,17 @@ JIRA:ABCD-711
 The default value is `JIRA:`.
 
 If this field is kept empty, this feature will be disabled.
+
+## Issue summary maximum width
+
+This setting limits the width of issue summaries in tags. The value is expressed in `rem` and defaults to `20`.
+
+When a summary is wider than the configured limit, it stays on one line and scrolls automatically so that the complete text can be read. The animation is available in inline issues, `jira-issue` blocks, and list search results.
+
+## Issue status maximum width
+
+This setting limits the width of issue statuses in tags. The value is expressed in `rem` and defaults to `2`.
+
+Statuses wider than the configured limit use the same automatic scrolling behavior as issue summaries. The issue key and icons always remain fixed.
+
+The full summary and status remain available as a tooltip. When reduced motion is enabled in the operating system, automatic scrolling is disabled and overflowing text remains truncated with an ellipsis.

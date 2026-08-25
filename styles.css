@@ -32,6 +32,34 @@
 
 .jira-issue-container .issue-summary {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.jira-issue-container .issue-status {
+    min-width: 0;
+}
+
+.jira-issue-container .ji-overflow-tag {
+    overflow: hidden;
+}
+
+.jira-issue-container .ji-overflow-viewport {
+    display: block;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jira-issue-container .ji-overflow-text {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.jira-issue-container .ji-overflow-tag.is-overflowing .ji-overflow-text {
+    will-change: transform;
 }
 
 .jira-issue-container a:hover {
@@ -108,6 +136,13 @@
     display: flex;
     flex-wrap: nowrap;
     justify-content: flex-start;
+    max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jira-issue-container .ji-overflow-text {
+        transform: none !important;
+    }
 }
 
 .jira-issue-container .ji-tags.has-addons .ji-tag:not(:last-child) {

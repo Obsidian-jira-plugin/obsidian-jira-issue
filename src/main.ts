@@ -1,5 +1,5 @@
 import { App, Editor, MarkdownView, Notice, Plugin } from 'obsidian'
-import { JiraIssueSettingTab } from './settings'
+import { JiraIssueSettingTab, SettingsData } from './settings'
 import JiraClient from './client/jiraClient'
 import ObjectsCache from './objectsCache'
 import { ColumnsSuggest } from './suggestions/columnsSuggest'
@@ -12,8 +12,7 @@ import { ViewPluginManager } from './rendering/inlineIssueViewPlugin'
 import { QuerySuggest } from './suggestions/querySuggest'
 import { setupIcons } from './icons/icons'
 import API from './api/api'
-
-// TODO: text on mobile and implement horizontal scrolling
+import { applyOverflowWidths, scheduleAllOverflowElementsRefresh, stopAllOverflowElements } from './rendering/overflowText'
 
 export let ObsidianApp: App = null
 
@@ -29,6 +28,7 @@ export default class JiraIssuePlugin extends Plugin {
         this.registerAPI()
         this._settingTab = new JiraIssueSettingTab(this.app, this)
         await this._settingTab.loadSettings()
+        applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
         this.addSettingTab(this._settingTab)
         JiraClient.updateCustomFieldsCache()
         // Load icons
@@ -58,7 +58,18 @@ export default class JiraIssuePlugin extends Plugin {
             ObjectsCache.clear()
             JiraClient.updateCustomFieldsCache()
             this._inlineIssueViewPlugin.update()
+            applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
         })
+
+        const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+        const reducedMotionListener = () => scheduleAllOverflowElementsRefresh(document)
+        if (typeof reducedMotionQuery.addEventListener === 'function') {
+            reducedMotionQuery.addEventListener('change', reducedMotionListener)
+            this.register(() => reducedMotionQuery.removeEventListener('change', reducedMotionListener))
+        } else {
+            reducedMotionQuery.addListener(reducedMotionListener)
+            this.register(() => reducedMotionQuery.removeListener(reducedMotionListener))
+        }
 
         // Commands
         this.addCommand({
@@ -96,6 +107,7 @@ export default class JiraIssuePlugin extends Plugin {
     }
 
     onunload() {
+        stopAllOverflowElements(document)
         this._settingTab = null
         this._columnsSuggest = null
         this._inlineIssueViewPlugin = null
@@ -106,4 +118,3 @@ export default class JiraIssuePlugin extends Plugin {
         window.$ji = API
     }
 }
-

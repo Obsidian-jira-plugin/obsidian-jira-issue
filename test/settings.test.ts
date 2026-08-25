@@ -75,6 +75,8 @@ describe('Settings', () => {
         expect(SettingsData).toEqual({
             ...StoredSettings,
             credentialStorageType: ECredentialStorageType.PLAINTEXT,
+            issueSummaryMaxWidthRem: DEFAULT_SETTINGS.issueSummaryMaxWidthRem,
+            issueStatusMaxWidthRem: DEFAULT_SETTINGS.issueStatusMaxWidthRem,
             accounts: [{
                 ...StoredSettings.accounts[0],
                 id: expect.any(String),
@@ -97,6 +99,18 @@ describe('Settings', () => {
         pluginMock.loadData.mockReturnValueOnce(deepCopy(StoredSettings))
         await settingTab.loadSettings()
         expect(SettingsData.cache.columns.length).toEqual(0)
+    })
+    test('loadSettings normalizes invalid issue tag widths', async () => {
+        pluginMock.loadData.mockReturnValueOnce({
+            ...deepCopy(StoredSettings),
+            issueSummaryMaxWidthRem: 0,
+            issueStatusMaxWidthRem: 'invalid',
+        })
+
+        await settingTab.loadSettings()
+
+        expect(SettingsData.issueSummaryMaxWidthRem).toEqual(DEFAULT_SETTINGS.issueSummaryMaxWidthRem)
+        expect(SettingsData.issueStatusMaxWidthRem).toEqual(DEFAULT_SETTINGS.issueStatusMaxWidthRem)
     })
     test.todo('loadSettings legacy account migration')
     test.todo('saveSettings')
