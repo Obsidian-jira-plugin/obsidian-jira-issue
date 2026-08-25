@@ -1,4 +1,8 @@
-import { decryptSecret, encryptSecret } from '../src/crypto/encryption'
+if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {
+    const { webcrypto } = require('crypto')
+    // @ts-ignore
+    globalThis.crypto = webcrypto
+}
 
 describe('Encryption (AES-256-GCM)', () => {
     const passphrase = 'MySuperSecretPassphrase123!'
