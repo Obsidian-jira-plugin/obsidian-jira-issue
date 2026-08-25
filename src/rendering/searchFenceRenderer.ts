@@ -12,7 +12,7 @@ import { ESearchColumnsTypes, ESearchResultsRenderingTypes, IJiraIssueAccountSet
 async function renderSearchResults(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults): Promise<void> {
     searchView.account = searchResults.account
     if (searchView.type === ESearchResultsRenderingTypes.LIST) {
-        renderSearchResultsList(rootEl, searchResults)
+        renderSearchResultsList(rootEl, searchView, searchResults)
     } else {
         await renderSearchResultsTable(rootEl, searchView, searchResults)
     }
@@ -65,12 +65,13 @@ async function renderSearchResultsTableBody(table: HTMLElement, searchView: Sear
     }
 }
 
-function renderSearchResultsList(rootEl: HTMLElement, searchResults: IJiraSearchResults): void {
+function renderSearchResultsList(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults): void {
     const list: HTMLElement[] = []
     for (const issue of searchResults.issues) {
         list.push(RC.renderIssue(issue))
     }
-    rootEl.replaceChildren(RC.renderContainer(list))
+    const footer = renderSearchFooter(rootEl, searchView, searchResults)
+    rootEl.replaceChildren(RC.renderContainer([...list, footer]))
 }
 
 function getAccountBandStyle(account: IJiraIssueAccountSettings): string {

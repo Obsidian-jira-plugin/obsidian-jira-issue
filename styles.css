@@ -5,6 +5,7 @@
     line-height: 1em;
     flex-direction: column;
     margin-bottom: 10px;
+    gap: 6px;
     vertical-align: middle;
 }
 
@@ -415,8 +416,15 @@ th {
 
 /* Inline Issues */
 .jira-issue-container.ji-inline-issue {
+<<<<<<< HEAD
     display: inline-block;
     margin: 0;
+=======
+    display: inline-flex;
+    margin: 0 4px;
+    vertical-align: middle;
+    gap: 0;
+>>>>>>> 179f0fc (fix: list search results rendering with footer and add flex gap / vertical alignment)
 }
 
 .jira-issue-container.ji-inline-issue .ji-tag {
@@ -654,4 +662,3 @@ svg.svg-icon.jira-issue-hidden {
     color: #a5adba;
     border-color: #3e4756;
 }
->>>>>>> f5453e8 (feat: add Modern Render Style with theme-native pastel status badges and Render Style setting dropdown)
