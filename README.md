@@ -8,6 +8,19 @@
 
 This plugin allows you to track the progress of [Atlassian Jira](https://www.atlassian.com/software/jira) issues from your [Obsidian.md](https://obsidian.md/) notes.
 
+## 🚀 Fork enhancements
+
+> **This fork adds Android compatibility, safer credentials, flexible Jira links, animated overflow for issue tags, configurable Render Styles, and robust Epic Link/Parent alias resolution.**
+
+- Jira responses containing valid JSON are accepted on Android even when the `Content-Type` response header is missing or uses different casing.
+- Jira passwords and API tokens can be moved out of plain-text configuration into Obsidian secure storage, or encrypted with an AES-GCM master passphrase for cross-platform vault synchronization. Existing configurations remain in plain text until the storage method is changed explicitly.
+- Each account can define an optional **Web Base URL** when its browser-facing Jira address differs from the API host.
+- Long issue summaries and statuses stay compact and automatically scroll to reveal their complete text in inline issues, `jira-issue` blocks, and list search results.
+- **Render Style Selector:** Switch dynamically between **Modern** (Obsidian-native pastel status badges and borders) and **Classic** (legacy Bulma tags) from `Settings > Jira Issue > Render style` with instant live workspace re-rendering.
+- **Epic Link & Parent Aliases:** Custom field columns `$Epic Link`, `$Epic Name`, `$Parent`, and `$Parent Link` in `jira-search` queries automatically fall back to Jira's modern `parent` / `epic` API objects, preserving compatibility with both legacy Jira Server and modern Jira Cloud instances.
+- Maximum widths are configurable from `Settings > Jira Issue > Rendering` and default to `20rem` for summaries and `2rem` for statuses.
+- Animations are only enabled when text actually overflows and respect the operating system's reduced-motion preference.
+
 <a href='https://ko-fi.com/marc0l92' target='_blank'><img height='35' style='border:0px;height:46px;' src='https://az743702.vo.msecnd.net/cdn/kofi3.png' border='0' alt='Buy Me a Coffee'></a>
 
 ![issues](./assets/issues.png)
