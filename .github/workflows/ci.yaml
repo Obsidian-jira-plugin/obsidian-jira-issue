@@ -16,7 +16,7 @@ jobs:
           node-version: "lts/*"
       - uses: pnpm/action-setup@v2
         with:
-          version: latest
+          version: 9
           run_install: false
       - name: Install dependencies
         id: install
@@ -37,7 +37,7 @@ jobs:
           node-version: "lts/*"
       - uses: pnpm/action-setup@v2
         with:
-          version: latest
+          version: 9
           run_install: false
       - name: Install dependencies
         id: install
@@ -58,7 +58,7 @@ jobs:
           node-version: "lts/*"
       - uses: pnpm/action-setup@v2
         with:
-          version: latest
+          version: 9
           run_install: false
       - name: Install dependencies
         id: install
