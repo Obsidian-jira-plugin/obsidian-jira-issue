@@ -1,12 +1,16 @@
 import { MarkdownPostProcessorContext } from "obsidian"
 import JiraClient from "../client/jiraClient"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
-import { COMPACT_SYMBOL, JIRA_KEY_REGEX } from "../interfaces/settingsInterfaces"
+import { COMPACT_SYMBOL, ERenderStyle, JIRA_KEY_REGEX } from "../interfaces/settingsInterfaces"
 import ObjectsCache from "../objectsCache"
 import { SettingsData } from "../settings"
 import RC from "./renderingCommon"
 
 // TODO: support explicit account selection in inline issues
+
+function getRenderStyleClass(): string {
+    return SettingsData.renderStyle === ERenderStyle.CLASSIC ? 'ji-style-classic' : 'ji-style-modern'
+}
 
 function convertInlineIssuesToTags(el: HTMLElement): void {
     if (SettingsData.inlineIssuePrefix) {
@@ -15,7 +19,7 @@ function convertInlineIssuesToTags(el: HTMLElement): void {
             // console.log({ match })
             const compact = !!match[1]
             const issueKey = match[2]
-            const container = createSpan({ cls: 'ji-inline-issue jira-issue-container', attr: { 'data-issue-key': issueKey, 'data-compact': compact } })
+            const container = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}`, attr: { 'data-issue-key': issueKey, 'data-compact': compact } })
             container.appendChild(RC.renderLoadingItem(issueKey, true))
             el.innerHTML = el.innerHTML.replace(match[0], container.outerHTML)
         }
@@ -29,7 +33,7 @@ function convertInlineIssuesUrlToTags(el: HTMLElement): void {
             issueUrlElements.forEach((issueUrlElement: HTMLAnchorElement) => {
                 const compact = issueUrlElement.previousSibling && issueUrlElement.previousSibling.textContent.endsWith('-')
                 const issueKey = issueUrlElement.href.replace(`${account.host}/browse/`, '')
-                const container = createSpan({ cls: 'ji-inline-issue jira-issue-container', attr: { 'data-issue-key': issueKey, 'data-compact': compact } })
+                const container = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}`, attr: { 'data-issue-key': issueKey, 'data-compact': compact } })
                 container.appendChild(RC.renderLoadingItem(issueKey, true))
                 issueUrlElement.replaceWith(container)
             })

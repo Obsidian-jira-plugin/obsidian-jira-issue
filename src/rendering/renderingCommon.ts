@@ -1,6 +1,6 @@
 import { FrontMatterCache, TFile } from "obsidian"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
-import { EColorSchema, IJiraIssueAccountSettings } from "../interfaces/settingsInterfaces"
+import { EColorSchema, ERenderStyle, IJiraIssueAccountSettings } from "../interfaces/settingsInterfaces"
 import { ObsidianApp } from "../main"
 import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
@@ -77,7 +77,8 @@ export default {
     },
 
     renderContainer(children: HTMLElement[]): HTMLElement {
-        const container = createDiv({ cls: 'jira-issue-container' })
+        const renderStyleClass = SettingsData.renderStyle === ERenderStyle.CLASSIC ? 'ji-style-classic' : 'ji-style-modern'
+        const container = createDiv({ cls: `jira-issue-container ${renderStyleClass}` })
         for (const child of children) {
             container.appendChild(child)
         }

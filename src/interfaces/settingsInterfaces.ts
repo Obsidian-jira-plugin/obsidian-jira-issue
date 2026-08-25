@@ -17,6 +17,15 @@ export enum EAuthenticationTypes {
     CLOUD = 'CLOUD',
     BEARER_TOKEN = 'BEARER_TOKEN',
 }
+export enum ERenderStyle {
+    MODERN = 'MODERN',
+    CLASSIC = 'CLASSIC',
+}
+export const RENDER_STYLE_DESCRIPTION = {
+    [ERenderStyle.MODERN]: 'Modern (Obsidian Native & Pastell Badges)',
+    [ERenderStyle.CLASSIC]: 'Classic (Legacy Bulma Badges)',
+}
+
 export enum EColorSchema {
     FOLLOW_OBSIDIAN = 'FOLLOW_OBSIDIAN',
     LIGHT = 'LIGHT',
@@ -52,6 +61,7 @@ export interface IJiraIssueSettings {
     showColorBand: boolean
     showJiraLink: boolean
     credentialStorageType: ECredentialStorageType
+    renderStyle: ERenderStyle
 
     // Legacy credentials
     host?: string

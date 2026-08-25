@@ -1,6 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting, TextComponent } from 'obsidian'
 import JiraClient from './client/jiraClient'
-import { COLOR_SCHEMA_DESCRIPTION, CREDENTIAL_STORAGE_TYPE_DESCRIPTION, EAuthenticationTypes, EColorSchema, ECredentialStorageType, ESearchColumnsTypes, IJiraIssueAccountSettings, IJiraIssueSettings, SEARCH_COLUMNS_DESCRIPTION } from './interfaces/settingsInterfaces'
+import { COLOR_SCHEMA_DESCRIPTION, CREDENTIAL_STORAGE_TYPE_DESCRIPTION, EAuthenticationTypes, EColorSchema, ECredentialStorageType, ERenderStyle, RENDER_STYLE_DESCRIPTION, ESearchColumnsTypes, IJiraIssueAccountSettings, IJiraIssueSettings, SEARCH_COLUMNS_DESCRIPTION } from './interfaces/settingsInterfaces'
 import JiraIssuePlugin from './main'
 import { getRandomHexColor } from './utils'
 import { isSecretStorageAvailable, loadAccountSecrets, saveAccountSecrets, deleteAccountSecrets } from './secretStorage'
@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
         columns: [],
     },
     colorSchema: EColorSchema.FOLLOW_OBSIDIAN,
+    renderStyle: ERenderStyle.MODERN,
     inlineIssueUrlToTag: true,
     inlineIssuePrefix: 'JIRA:',
     issueSummaryMaxWidthRem: 20,
@@ -588,6 +589,17 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     SettingsData.searchResultsLimit = parseInt(value) || DEFAULT_SETTINGS.searchResultsLimit
                     await this.saveSettings()
                 }))
+        new Setting(containerEl)
+            .setName('Render style')
+            .setDesc('Choose between Modern (Obsidian Native with pastel status badges) or Classic (legacy Bulma tags).')
+            .addDropdown(dropdown => dropdown
+                .addOptions(RENDER_STYLE_DESCRIPTION)
+                .setValue(SettingsData.renderStyle || ERenderStyle.MODERN)
+                .onChange(async value => {
+                    SettingsData.renderStyle = value as ERenderStyle
+                    await this.saveSettings()
+                }))
+
         new Setting(containerEl)
             .setName('Color schema')
             // .setDesc('')
