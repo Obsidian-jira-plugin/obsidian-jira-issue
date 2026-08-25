@@ -75,6 +75,7 @@ describe('Settings', () => {
         expect(SettingsData).toEqual({
             ...StoredSettings,
             credentialStorageType: ECredentialStorageType.PLAINTEXT,
+            renderStyle: DEFAULT_SETTINGS.renderStyle,
             issueSummaryMaxWidthRem: DEFAULT_SETTINGS.issueSummaryMaxWidthRem,
             issueStatusMaxWidthRem: DEFAULT_SETTINGS.issueStatusMaxWidthRem,
             accounts: [{
