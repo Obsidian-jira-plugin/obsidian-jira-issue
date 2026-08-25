@@ -20,7 +20,7 @@ jobs:
           node-version: "lts/*"
       - uses: pnpm/action-setup@v2
         with:
-          version: 9
+          version: 8
           run_install: false
       - name: Install dependencies
         run: |
