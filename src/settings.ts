@@ -262,6 +262,13 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         if (this._onChangeListener) {
             this._onChangeListener()
         }
+        if (this._app && this._app.workspace) {
+            this._app.workspace.iterateAllLeaves(leaf => {
+                if (leaf.view && typeof (leaf.view as any).previewMode?.rerender === 'function') {
+                    (leaf.view as any).previewMode.rerender(true)
+                }
+            })
+        }
     }
 
     onChange(listener: () => void) {

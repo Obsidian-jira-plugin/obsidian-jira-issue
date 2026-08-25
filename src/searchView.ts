@@ -59,9 +59,11 @@ export class SearchView {
                                 if (column.startsWith('$')) {
                                     columnExtra = column.slice(1)
                                     column = ESearchColumnsTypes.CUSTOM_FIELD
-                                    const isVirtualEpicField = ['EPIC NAME', 'EPIC LINK', 'EPIC_NAME', 'EPIC_LINK'].includes(columnExtra.toUpperCase())
-                                    const isVirtualParentField = ['PARENT', 'PARENT LINK', 'PARENT_LINK', 'PARENT NAME', 'PARENT_NAME'].includes(columnExtra.toUpperCase())
-                                    if (!isVirtualEpicField && !isVirtualParentField && SettingsData.cache.columns.indexOf(columnExtra.toUpperCase()) === -1) {
+                                    const upperColumnExtra = columnExtra.toUpperCase()
+                                    const knownCustomFields = SettingsData.cache.columns || []
+                                    const isKnownAlias = ['EPIC LINK', 'EPIC NAME', 'PARENT LINK', 'PARENT', 'EPIC', 'EPIC_LINK', 'EPIC_NAME', 'PARENT_LINK', 'PARENT_NAME'].includes(upperColumnExtra)
+                                    const isKnownField = knownCustomFields.indexOf(upperColumnExtra) !== -1 || isKnownAlias
+                                    if (!isKnownField && knownCustomFields.length > 0) {
                                         throw new Error(`Custom field ${columnExtra} not found`)
                                     }
                                 }
