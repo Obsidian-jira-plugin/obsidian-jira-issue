@@ -1,2 +1,6 @@
+packages:
+  - '.'
+  - 'docs-gen'
+
 onlyBuiltDependencies:
   - esbuild
