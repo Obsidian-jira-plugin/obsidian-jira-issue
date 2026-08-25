@@ -34,6 +34,18 @@ describe('JiraClient', () => {
                 url: 'https://test-company.atlassian.net/rest/api/latest/project',
             })
         })
+
+        test('testConnection accepts a JSON response without headers', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, json: { issues: [] } } as any)
+
+            expect(await JiraClient.testConnection(TestAccountOpen)).toEqual(true)
+        })
+
+        test('testConnection accepts mixed-case content-type headers', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, headers: { 'Content-Type': 'application/json' }, json: { issues: [] } } as any)
+
+            expect(await JiraClient.testConnection(TestAccountOpen)).toEqual(true)
+        })
     })
 
     describe('Negative tests', () => {
@@ -55,6 +67,27 @@ describe('JiraClient', () => {
                     url: 'https://test-company.atlassian.net/rest/api/latest/project',
                 })
             }
+        })
+
+        test('testConnection rejects a non-JSON HTTP 200 response', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, headers: { 'Content-Type': 'text/plain' }, text: 'OK' } as any)
+
+            await expect(JiraClient.testConnection(TestAccountOpen))
+                .rejects.toEqual(new Error('Jira API 200 Error: HTTP 200'))
+        })
+
+        test('testConnection uses a JSON error message without content-type headers', async () => {
+            requestUrlMock.mockReturnValue({ status: 500, json: { message: 'Jira is unavailable' } } as any)
+
+            await expect(JiraClient.testConnection(TestAccountOpen))
+                .rejects.toEqual(new Error('Jira API 500 Error: Jira is unavailable'))
+        })
+
+        test('testConnection normalizes content-type headers when reading text errors', async () => {
+            requestUrlMock.mockReturnValue({ status: 500, headers: { 'Content-Type': 'TEXT/HTML' }, text: '<title>Log in</title>' } as any)
+
+            await expect(JiraClient.testConnection(TestAccountOpen))
+                .rejects.toEqual(new Error('Jira API 500 Error: Login required'))
         })
     })
 

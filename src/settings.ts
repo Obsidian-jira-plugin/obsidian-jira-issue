@@ -386,6 +386,15 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     newAccount.host = value
                 }))
         new Setting(containerEl)
+            .setName('Web Base URL')
+            .setDesc('Optional browser-facing Jira URL (use when browser links differ from the API host).')
+            .addText(text => text
+                .setPlaceholder('Example: https://your-company.atlassian.net')
+                .setValue(newAccount.webBaseUrl || '')
+                .onChange(async value => {
+                    newAccount.webBaseUrl = value
+                }))
+        new Setting(containerEl)
             .setName('Authentication type')
             .setDesc('Select how the plugin should authenticate in your Jira server.')
             .addDropdown(dropdown => dropdown

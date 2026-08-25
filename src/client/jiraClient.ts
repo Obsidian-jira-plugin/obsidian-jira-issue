@@ -85,12 +85,26 @@ function buildHeaders(account: IJiraIssueAccountSettings): Record<string, string
     return requestHeaders
 }
 
-function isJsonResponse(response: RequestUrlResponse): boolean {
-    return response.headers && response.headers['content-type'] && response.headers['content-type'].includes('json') && response.json !== undefined
+function getResponseHeader(response: RequestUrlResponse, headerName: string): string | undefined {
+    if (!response || !response.headers) {
+        return undefined
+    }
+    const normalizedHeaderName = headerName.toLowerCase()
+    const matchingHeader = Object.keys(response.headers).find(header => header.toLowerCase() === normalizedHeaderName)
+    return matchingHeader ? response.headers[matchingHeader] : undefined
+}
+
+function hasJsonBody(response: RequestUrlResponse): boolean {
+    return response && response.json !== undefined && response.json !== null
 }
 
 function isTextResponse(response: RequestUrlResponse): boolean {
-    return response.headers && response.headers['content-type'] && response.headers['content-type'].includes('text') && response.text !== undefined
+    if (!response || response.text === undefined) {
+        return false
+    }
+    const contentType = getResponseHeader(response, 'content-type')
+    const normalizedContentType = contentType && contentType.toLowerCase()
+    return !normalizedContentType || normalizedContentType.includes('text') || normalizedContentType.includes('html')
 }
 
 async function sendRequest(requestOptions: RequestOptions): Promise<any> {
@@ -98,7 +112,7 @@ async function sendRequest(requestOptions: RequestOptions): Promise<any> {
     if (requestOptions.account) {
         response = await sendRequestWithAccount(requestOptions.account, requestOptions)
 
-        if (response.status === 200 && isJsonResponse(response)) {
+        if (response.status === 200 && hasJsonBody(response)) {
             return { ...response.json, account: requestOptions.account }
         }
     } else {
@@ -106,7 +120,7 @@ async function sendRequest(requestOptions: RequestOptions): Promise<any> {
             const account = SettingsData.accounts[i]
             response = await sendRequestWithAccount(account, requestOptions)
 
-            if (response.status === 200 && isJsonResponse(response)) {
+            if (response.status === 200 && hasJsonBody(response)) {
                 return { ...response.json, account: account }
             } else if (Math.floor(response.status / 100) !== 4) {
                 break
@@ -114,7 +128,7 @@ async function sendRequest(requestOptions: RequestOptions): Promise<any> {
         }
     }
 
-    if (response && response.headers && isJsonResponse(response) && response.json.errorMessages) {
+    if (hasJsonBody(response) && response.json.errorMessages) {
         throw new Error(response.json.errorMessages.join('\n'))
     } else if (response && response.status) {
         let errorMsg
@@ -130,9 +144,9 @@ async function sendRequest(requestOptions: RequestOptions): Promise<any> {
             case 410:
                 throw new Error(`Missing API: Activate the 2025 search api in the Jira Issue account settings`)
             default:
-                if (isJsonResponse(response) && response.json.message) {
+                if (hasJsonBody(response) && response.json.message) {
                     errorMsg = response.json.message
-                } else if (isTextResponse(response) && response.text.contains('<title>Log in')) {
+                } else if (isTextResponse(response) && response.text.includes('<title>Log in')) {
                     errorMsg = 'Login required'
                 } else {
                     errorMsg = `HTTP ${response.status}`

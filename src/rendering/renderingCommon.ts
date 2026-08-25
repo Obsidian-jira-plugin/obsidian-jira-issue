@@ -27,16 +27,20 @@ export const JIRA_STATUS_COLOR_MAP_BY_NAME: Record<string, string> = {
     'Closed': 'is-success'
 }
 
+function resolveWebBaseUrl(account: IJiraIssueAccountSettings): string {
+    return (account.webBaseUrl || account.host).trim().replace(/\/+$/, '')
+}
+
 export default {
     issueUrl(account: IJiraIssueAccountSettings, issueKey: string): string {
         try {
-            return (new URL(`${account.host}/browse/${issueKey}`)).toString()
+            return (new URL(`${resolveWebBaseUrl(account)}/browse/${issueKey}`)).toString()
         } catch (e) { return '' }
     },
 
     searchUrl(account: IJiraIssueAccountSettings, searchQuery: string): string {
         try {
-            return (new URL(`${account.host}/issues/?jql=${searchQuery}`)).toString()
+            return (new URL(`${resolveWebBaseUrl(account)}/issues/?jql=${searchQuery}`)).toString()
         } catch (e) { return '' }
     },
 
