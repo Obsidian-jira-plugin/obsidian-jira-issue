@@ -1,1 +1,0 @@
-(self.webpackChunkobsidian_jira_issue=self.webpackChunkobsidian_jira_issue||[]).push([[56],{9056:()=>{}}]);
