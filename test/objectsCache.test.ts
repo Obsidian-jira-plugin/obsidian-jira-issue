@@ -67,7 +67,7 @@ describe('ObjectsCache', () => {
     test('Item getTime', () => {
         expect(ObjectsCache.getTime(kKey1)).toBeNull()
         ObjectsCache.add(kKey1, kVal1)
-        expect(ObjectsCache.getTime(kKey1)).toEqual('Sat, Jan 1, 2000 12:00 AM')
+        expect(ObjectsCache.getTime(kKey1)).toEqual(require('moment')(kFakeDateNow.getTime()).format('llll'))
     })
 
     test('Item get item after expiration', () => {

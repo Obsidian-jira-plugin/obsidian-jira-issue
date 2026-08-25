@@ -73,6 +73,13 @@ export interface IJiraIssue {
         worklog: {
             worklogs: IJiraWorklog[]
         }
+        parent?: {
+            id?: string
+            key?: string
+            fields?: {
+                summary?: string
+            }
+        }
         [k: string]: any
     }
     account: IJiraIssueAccountSettings

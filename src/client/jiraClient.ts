@@ -302,9 +302,21 @@ export default {
                         SettingsData.cache.columns.push(field.schema.customId.toString(), field.name.toUpperCase())
                     }
                 }
+                // Virtual field mapping for deprecated Epic fields
+                account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
+                account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
+                account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
+                account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
+                account.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
             } catch (e) {
                 console.error('Error while retrieving custom fields list of account:', account.alias, e)
             }
+        }
+        if (SettingsData.cache.columns.indexOf('EPIC NAME') === -1) {
+            SettingsData.cache.columns.push('EPIC NAME')
+        }
+        if (SettingsData.cache.columns.indexOf('EPIC LINK') === -1) {
+            SettingsData.cache.columns.push('EPIC LINK')
         }
     },
 

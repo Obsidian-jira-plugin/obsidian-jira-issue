@@ -1,6 +1,7 @@
 import * as obsidian from 'obsidian'
 import JiraClient from '../src/client/jiraClient'
 import { TestAccountOpen } from './testData'
+import { SettingsData } from '../src/settings'
 
 const kIssueKey = 'AAA-123'
 const requestUrlMock = jest.spyOn(obsidian, 'requestUrl')
@@ -60,7 +61,13 @@ describe('JiraClient', () => {
     test.todo('getIssue')
     test.todo('getSearchResults')
     test.todo('updateStatusColorCache')
-    test.todo('updateCustomFieldsCache')
+        test('updateCustomFieldsCache populates virtual EPIC NAME mapping', async () => {
+            SettingsData.accounts = [TestAccountOpen]
+            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: [] } as any)
+            await JiraClient.updateCustomFieldsCache()
+            expect((TestAccountOpen.cache.customFieldsNameToId as any)['EPIC NAME']).toEqual('VIRTUAL_EPIC_NAME')
+            expect((TestAccountOpen.cache.customFieldsIdToName as any)['VIRTUAL_EPIC_NAME']).toEqual('EPIC NAME')
+        })
     test.todo('getLoggedUser')
     test.todo('getDevStatus')
 
