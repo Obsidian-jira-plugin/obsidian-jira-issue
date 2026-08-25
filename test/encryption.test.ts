@@ -1,3 +1,5 @@
+import { decryptSecret, encryptSecret } from '../src/crypto/encryption'
+
 if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {
     const { webcrypto } = require('crypto')
     // @ts-ignore
