@@ -44,6 +44,8 @@ export interface IJiraIssueSettings {
     colorSchema: EColorSchema
     inlineIssueUrlToTag: boolean
     inlineIssuePrefix: string
+    issueSummaryMaxWidthRem: number
+    issueStatusMaxWidthRem: number
     searchColumns: ISearchColumn[]
     logRequestsResponses: boolean
     logImagesFetch: boolean

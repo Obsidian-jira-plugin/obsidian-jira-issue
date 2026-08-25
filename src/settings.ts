@@ -31,6 +31,8 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     colorSchema: EColorSchema.FOLLOW_OBSIDIAN,
     inlineIssueUrlToTag: true,
     inlineIssuePrefix: 'JIRA:',
+    issueSummaryMaxWidthRem: 20,
+    issueStatusMaxWidthRem: 2,
     showColorBand: true,
     showJiraLink: true,
     credentialStorageType: ECredentialStorageType.KEYCHAIN,
@@ -78,6 +80,11 @@ function deepCopy(obj: any): any {
     return JSON.parse(JSON.stringify(obj))
 }
 
+function normalizePositiveNumber(value: number, defaultValue: number): number {
+    const parsedValue = Number(value)
+    return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue
+}
+
 export class JiraIssueSettingTab extends PluginSettingTab {
     private _plugin: JiraIssuePlugin
     private _onChangeListener: (() => void) | null = null
@@ -93,6 +100,8 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         const storedData = (await this._plugin.loadData()) || {}
         // Read plugin data and fill new fields with default values
         Object.assign(SettingsData, DEFAULT_SETTINGS, storedData)
+        SettingsData.issueSummaryMaxWidthRem = normalizePositiveNumber(SettingsData.issueSummaryMaxWidthRem, DEFAULT_SETTINGS.issueSummaryMaxWidthRem)
+        SettingsData.issueStatusMaxWidthRem = normalizePositiveNumber(SettingsData.issueStatusMaxWidthRem, DEFAULT_SETTINGS.issueStatusMaxWidthRem)
 
         // Ensure default credentialStorageType if not present
         if (!storedData.credentialStorageType) {
@@ -100,7 +109,6 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 ? ECredentialStorageType.KEYCHAIN
                 : ECredentialStorageType.PLAINTEXT
         }
-
         for (const i in SettingsData.accounts) {
             SettingsData.accounts[i] = Object.assign({}, DEFAULT_ACCOUNT, SettingsData.accounts[i])
             if (!SettingsData.accounts[i].id) {
@@ -604,6 +612,33 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     inlineIssuePrefixSetting.setDesc(inlineIssuePrefixDesc(SettingsData.inlineIssuePrefix))
                     await this.saveSettings()
                 }))
+
+        new Setting(containerEl)
+            .setName('Issue summary maximum width')
+            .setDesc('Maximum width of issue summaries in rem. Longer summaries scroll automatically.')
+            .addText(text => {
+                text
+                    .setValue(SettingsData.issueSummaryMaxWidthRem.toString())
+                    .onChange(async value => {
+                        SettingsData.issueSummaryMaxWidthRem = normalizePositiveNumber(Number(value), DEFAULT_SETTINGS.issueSummaryMaxWidthRem)
+                        await this.saveSettings()
+                    })
+                text.inputEl.setAttrs({ type: 'number', min: '0.1', step: '1' })
+            })
+
+        new Setting(containerEl)
+            .setName('Issue status maximum width')
+            .setDesc('Maximum width of issue statuses in rem. Longer statuses scroll automatically.')
+            .addText(text => {
+                text
+                    .setValue(SettingsData.issueStatusMaxWidthRem.toString())
+                    .onChange(async value => {
+                        SettingsData.issueStatusMaxWidthRem = normalizePositiveNumber(Number(value), DEFAULT_SETTINGS.issueStatusMaxWidthRem)
+                        await this.saveSettings()
+                    })
+                text.inputEl.setAttrs({ type: 'number', min: '0.1', step: '1' })
+            })
+
         new Setting(containerEl)
             .setName('Show color band')
             .setDesc('Display color band near by inline issue to simplify the account identification.')
