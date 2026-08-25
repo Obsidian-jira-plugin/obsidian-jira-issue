@@ -264,8 +264,14 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         }
         if (this._app && this._app.workspace) {
             this._app.workspace.iterateAllLeaves(leaf => {
-                if (leaf.view && typeof (leaf.view as any).previewMode?.rerender === 'function') {
-                    (leaf.view as any).previewMode.rerender(true)
+                if (leaf.view) {
+                    if (typeof (leaf.view as any).previewMode?.rerender === 'function') {
+                        (leaf.view as any).previewMode.rerender(true)
+                    }
+                    const editor = (leaf.view as any).editor
+                    if (editor && editor.cm && typeof editor.cm.dispatch === 'function') {
+                        editor.cm.dispatch()
+                    }
                 }
             })
         }
