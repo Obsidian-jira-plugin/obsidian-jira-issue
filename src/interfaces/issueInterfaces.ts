@@ -17,6 +17,7 @@ export interface IJiraIssue {
         issuetype: {
             iconUrl: string
             name: string
+            subtask?: boolean
         }
         priority: {
             iconUrl: string
