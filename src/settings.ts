@@ -6,6 +6,7 @@ import { getRandomHexColor } from './utils'
 import { isSecretStorageAvailable, loadAccountSecrets, saveAccountSecrets, deleteAccountSecrets } from './secretStorage'
 import { decryptSecret, encryptSecret } from './crypto/encryption'
 import { UnlockModal } from './modals/unlockModal'
+import { refreshInlineIssuesEffect } from './rendering/inlineIssueViewPlugin'
 
 export let MasterPassphraseSession: string | null = null
 
@@ -88,7 +89,7 @@ function normalizePositiveNumber(value: number, defaultValue: number): number {
 
 export class JiraIssueSettingTab extends PluginSettingTab {
     private _plugin: JiraIssuePlugin
-    private _onChangeListener: (() => void) | null = null
+    private _onChangeListener: ((options?: { isVisualOnly?: boolean }) => void) | null = null
     private _searchColumnsDetails: HTMLDetailsElement = null
     private _showPassword = false
 
@@ -199,7 +200,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         }
     }
 
-    async saveSettings() {
+    async saveSettings(options?: { isVisualOnly?: boolean }) {
         const settingsToStore: IJiraIssueSettings = Object.assign({}, SettingsData, {
             // Global cache settings cleanup
             cache: DEFAULT_SETTINGS.cache, jqlAutocomplete: null, customFieldsIdToName: null, customFieldsNameToId: null, statusColorCache: null
@@ -212,13 +213,6 @@ export class JiraIssueSettingTab extends PluginSettingTab {
             for (const account of SettingsData.accounts) {
                 await saveAccountSecrets(this.app, account)
             }
-            // Strip raw secrets from data.json
-            for (const account of settingsToStore.accounts) {
-                delete account.password
-                delete account.bareToken
-                delete account.encryptedPassword
-                delete account.encryptedBareToken
-            }
         } else if (SettingsData.credentialStorageType === ECredentialStorageType.PASSPHRASE) {
             if (isSecretStorageAvailable(this.app)) {
                 for (const account of SettingsData.accounts) {
@@ -229,12 +223,12 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 for (const account of settingsToStore.accounts) {
                     if (account.password) {
                         account.encryptedPassword = await encryptSecret(MasterPassphraseSession, account.password)
+                        delete account.password
                     }
                     if (account.bareToken) {
                         account.encryptedBareToken = await encryptSecret(MasterPassphraseSession, account.bareToken)
+                        delete account.bareToken
                     }
-                    delete account.password
-                    delete account.bareToken
                 }
             }
         } else if (SettingsData.credentialStorageType === ECredentialStorageType.PLAINTEXT) {
@@ -260,7 +254,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         await this._plugin.saveData(settingsToStore)
 
         if (this._onChangeListener) {
-            this._onChangeListener()
+            this._onChangeListener(options)
         }
         if (this.app && this.app.workspace) {
             this.app.workspace.iterateAllLeaves((leaf: any) => {
@@ -270,14 +264,16 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     }
                     const editor = (leaf.view as any).editor
                     if (editor && editor.cm && typeof editor.cm.dispatch === 'function') {
-                        editor.cm.dispatch()
+                        editor.cm.dispatch({
+                            effects: [refreshInlineIssuesEffect.of()]
+                        })
                     }
                 }
             })
         }
     }
 
-    onChange(listener: () => void) {
+    onChange(listener: (options?: { isVisualOnly?: boolean }) => void) {
         this._onChangeListener = listener
     }
 
@@ -610,7 +606,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .setValue(SettingsData.renderStyle || ERenderStyle.MODERN)
                 .onChange(async value => {
                     SettingsData.renderStyle = value as ERenderStyle
-                    await this.saveSettings()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
 
         new Setting(containerEl)
@@ -621,7 +617,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .setValue(SettingsData.colorSchema)
                 .onChange(async value => {
                     SettingsData.colorSchema = value as EColorSchema
-                    await this.saveSettings()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
 
         new Setting(containerEl)
@@ -631,7 +627,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .setValue(SettingsData.inlineIssueUrlToTag)
                 .onChange(async value => {
                     SettingsData.inlineIssueUrlToTag = value
-                    await this.saveSettings()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
 
         const inlineIssuePrefixDesc = (prefix: string) => 'Prefix to use when rendering inline issues. Keep this field empty to disable this feature. '
@@ -644,7 +640,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .onChange(async value => {
                     SettingsData.inlineIssuePrefix = value
                     inlineIssuePrefixSetting.setDesc(inlineIssuePrefixDesc(SettingsData.inlineIssuePrefix))
-                    await this.saveSettings()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
 
         new Setting(containerEl)
@@ -655,7 +651,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     .setValue(SettingsData.issueSummaryMaxWidthRem.toString())
                     .onChange(async value => {
                         SettingsData.issueSummaryMaxWidthRem = normalizePositiveNumber(Number(value), DEFAULT_SETTINGS.issueSummaryMaxWidthRem)
-                        await this.saveSettings()
+                        await this.saveSettings({ isVisualOnly: true })
                     })
                 text.inputEl.setAttrs({ type: 'number', min: '0.1', step: '1' })
             })
@@ -668,7 +664,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     .setValue(SettingsData.issueStatusMaxWidthRem.toString())
                     .onChange(async value => {
                         SettingsData.issueStatusMaxWidthRem = normalizePositiveNumber(Number(value), DEFAULT_SETTINGS.issueStatusMaxWidthRem)
-                        await this.saveSettings()
+                        await this.saveSettings({ isVisualOnly: true })
                     })
                 text.inputEl.setAttrs({ type: 'number', min: '0.1', step: '1' })
             })
@@ -680,7 +676,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .setValue(SettingsData.showColorBand)
                 .onChange(async value => {
                     SettingsData.showColorBand = value
-                    await this.saveSettings()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
 
         new Setting(containerEl)
@@ -690,7 +686,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .setValue(SettingsData.showJiraLink)
                 .onChange(async value => {
                     SettingsData.showJiraLink = value
-                    await this.saveSettings()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
     }
 

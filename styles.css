@@ -416,15 +416,10 @@ th {
 
 /* Inline Issues */
 .jira-issue-container.ji-inline-issue {
-<<<<<<< HEAD
-    display: inline-block;
-    margin: 0;
-=======
     display: inline-flex;
     margin: 0 4px;
     vertical-align: middle;
     gap: 0;
->>>>>>> 179f0fc (fix: list search results rendering with footer and add flex gap / vertical alignment)
 }
 
 .jira-issue-container.ji-inline-issue .ji-tag {
@@ -572,8 +567,8 @@ svg.svg-icon.jira-issue-hidden {
 
 
 /* Modern Theme Styling */
-.jira-issue-container.ji-style-modern .ji-tag,
-.jira-issue-container:not(.ji-style-classic) .ji-tag {
+.jira-issue-container.ji-style-modern .ji-tag:not(.is-danger):not(.is-warning):not(.is-success):not(.is-info):not(.is-link):not(.is-delete),
+.jira-issue-container:not(.ji-style-classic) .ji-tag:not(.is-danger):not(.is-warning):not(.is-success):not(.is-info):not(.is-link):not(.is-delete) {
     font-size: 0.82em;
     font-weight: 500;
     border-radius: 4px;
@@ -589,6 +584,28 @@ svg.svg-icon.jira-issue-hidden {
     color: var(--text-accent, #485fc7);
     background-color: var(--background-secondary-alt, #edf2fc);
     border-color: var(--background-modifier-border-focus, #c0d1f7);
+}
+
+/* Modern Error Badges (Light Mode) */
+.jira-issue-container.ji-style-modern .ji-tag.is-danger,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger {
+    background-color: #ffebe6;
+    color: #de350b;
+    border-color: #ffbdad;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.is-danger.is-light,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger.is-light {
+    background-color: #fff0ed;
+    color: #bf2600;
+    border-color: #ffbdad;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.is-delete.is-danger,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.is-delete.is-danger {
+    background-color: #de350b;
+    color: #ffffff;
+    border-color: #de350b;
 }
 
 /* Modern Pastel Status Badges (Light Mode) */
@@ -625,6 +642,28 @@ svg.svg-icon.jira-issue-hidden {
     background-color: #dfe1e6;
     color: #42526e;
     border-color: #c1c7d0;
+}
+
+/* Modern Error Badges (Dark Mode) */
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.is-danger,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger {
+    background-color: #4a1d1d;
+    color: #ff8f73;
+    border-color: #632626;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.is-danger.is-light,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger.is-light {
+    background-color: #3b1414;
+    color: #ff8f73;
+    border-color: #632626;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.is-delete.is-danger,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.is-delete.is-danger {
+    background-color: #de350b;
+    color: #ffffff;
+    border-color: #de350b;
 }
 
 /* Modern Pastel Status Badges (Dark Mode) */

@@ -104,6 +104,19 @@ account: ${TestAccountOpen.alias}`)
                 ])
                 expect(sv.account).toBeNull()
             })
+            test('Virtual Epic and Parent aliases', () => {
+                const sv = SearchView.fromString(`type: ${kType}
+    query: ${kQuery}
+    columns: $Epic, $Epic Link, $Epic Name, $Parent, $Parent Link, $Parent Name`)
+                expect(sv.columns).toEqual([
+                    { compact: false, extra: 'Epic', type: ESearchColumnsTypes.CUSTOM_FIELD },
+                    { compact: false, extra: 'Epic Link', type: ESearchColumnsTypes.CUSTOM_FIELD },
+                    { compact: false, extra: 'Epic Name', type: ESearchColumnsTypes.CUSTOM_FIELD },
+                    { compact: false, extra: 'Parent', type: ESearchColumnsTypes.CUSTOM_FIELD },
+                    { compact: false, extra: 'Parent Link', type: ESearchColumnsTypes.CUSTOM_FIELD },
+                    { compact: false, extra: 'Parent Name', type: ESearchColumnsTypes.CUSTOM_FIELD },
+                ])
+            })
         })
 
         describe('Negative tests', () => {

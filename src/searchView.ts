@@ -1,10 +1,11 @@
 import { COMMENT_REGEX, COMPACT_SYMBOL, ESearchColumnsTypes, ESearchResultsRenderingTypes, IJiraIssueAccountSettings, ISearchColumn } from "./interfaces/settingsInterfaces"
 import { SettingsData } from "./settings"
 import { getAccountByAlias } from "./utils"
+import { VIRTUAL_CUSTOM_FIELD_ALIASES } from "./rendering/renderTableColumns"
 
 export class SearchView {
     type: ESearchResultsRenderingTypes = ESearchResultsRenderingTypes.TABLE
-    query: string = ''
+    query = ''
     limit: number = null
     columns: ISearchColumn[] = []
     account: IJiraIssueAccountSettings = null
@@ -61,7 +62,7 @@ export class SearchView {
                                     column = ESearchColumnsTypes.CUSTOM_FIELD
                                     const upperColumnExtra = columnExtra.toUpperCase()
                                     const knownCustomFields = SettingsData.cache.columns || []
-                                    const isKnownAlias = ['EPIC LINK', 'EPIC NAME', 'PARENT LINK', 'PARENT', 'EPIC', 'EPIC_LINK', 'EPIC_NAME', 'PARENT_LINK', 'PARENT_NAME'].includes(upperColumnExtra)
+                                    const isKnownAlias = VIRTUAL_CUSTOM_FIELD_ALIASES.includes(upperColumnExtra)
                                     const isKnownField = knownCustomFields.indexOf(upperColumnExtra) !== -1 || isKnownAlias
                                     if (!isKnownField && knownCustomFields.length > 0) {
                                         throw new Error(`Custom field ${columnExtra} not found`)
