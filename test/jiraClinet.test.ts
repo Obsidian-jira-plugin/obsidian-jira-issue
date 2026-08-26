@@ -46,6 +46,12 @@ describe('JiraClient', () => {
 
             expect(await JiraClient.testConnection(TestAccountOpen)).toEqual(true)
         })
+
+        test('testConnection falls back to parsing JSON text if response.json is undefined', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, headers: { 'Content-Type': 'application/json' }, text: JSON.stringify({ issues: [] }) } as any)
+
+            expect(await JiraClient.testConnection(TestAccountOpen)).toEqual(true)
+        })
     })
 
     describe('Negative tests', () => {
