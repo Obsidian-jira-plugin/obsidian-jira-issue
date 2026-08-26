@@ -1,8 +1,25 @@
 import { App } from 'obsidian'
 import { IJiraIssueAccountSettings } from './interfaces/settingsInterfaces'
 
+interface ISecretStorage {
+    setSecret(id: string, secret: string): void
+    getSecret(id: string): string | null
+}
+
+function getSecretStorage(app: App): ISecretStorage | undefined {
+    const secretStorage = app && (app as any).secretStorage
+    if (
+        !secretStorage ||
+        typeof secretStorage.setSecret !== 'function' ||
+        typeof secretStorage.getSecret !== 'function'
+    ) {
+        return undefined
+    }
+    return secretStorage
+}
+
 export function isSecretStorageAvailable(app: App): boolean {
-    return !!(app && (app as any).secretStorage)
+    return !!getSecretStorage(app)
 }
 
 export function getAccountSecretKey(account: IJiraIssueAccountSettings, secretType: 'password' | 'bareToken'): string {
@@ -15,40 +32,37 @@ export function getAccountSecretKey(account: IJiraIssueAccountSettings, secretTy
 }
 
 export async function saveAccountSecrets(app: App, account: IJiraIssueAccountSettings): Promise<void> {
-    if (!isSecretStorageAvailable(app)) return
-    const secretStorage = (app as any).secretStorage
+    const secretStorage = getSecretStorage(app)
+    if (!secretStorage) return
 
-    const passwordKey = getAccountSecretKey(account, 'password')
-    if (account.password) {
-        await secretStorage.setSecret(passwordKey, account.password)
-    } else {
-        await secretStorage.deleteSecret(passwordKey)
-    }
-
-    const tokenKey = getAccountSecretKey(account, 'bareToken')
-    if (account.bareToken) {
-        await secretStorage.setSecret(tokenKey, account.bareToken)
-    } else {
-        await secretStorage.deleteSecret(tokenKey)
-    }
+    setAndVerifySecret(secretStorage, getAccountSecretKey(account, 'password'), account.password || '')
+    setAndVerifySecret(secretStorage, getAccountSecretKey(account, 'bareToken'), account.bareToken || '')
 }
 
 export async function loadAccountSecrets(app: App, account: IJiraIssueAccountSettings): Promise<{ password?: string; bareToken?: string }> {
-    if (!isSecretStorageAvailable(app)) return {}
-    const secretStorage = (app as any).secretStorage
+    const secretStorage = getSecretStorage(app)
+    if (!secretStorage) return {}
 
     const passwordKey = getAccountSecretKey(account, 'password')
-    const password = (await secretStorage.getSecret(passwordKey)) || undefined
+    const password = secretStorage.getSecret(passwordKey) || undefined
 
     const tokenKey = getAccountSecretKey(account, 'bareToken')
-    const bareToken = (await secretStorage.getSecret(tokenKey)) || undefined
+    const bareToken = secretStorage.getSecret(tokenKey) || undefined
 
     return { password, bareToken }
 }
 
 export async function deleteAccountSecrets(app: App, account: IJiraIssueAccountSettings): Promise<void> {
-    if (!isSecretStorageAvailable(app)) return
-    const secretStorage = (app as any).secretStorage
-    await secretStorage.deleteSecret(getAccountSecretKey(account, 'password'))
-    await secretStorage.deleteSecret(getAccountSecretKey(account, 'bareToken'))
+    const secretStorage = getSecretStorage(app)
+    if (!secretStorage) return
+
+    setAndVerifySecret(secretStorage, getAccountSecretKey(account, 'password'), '')
+    setAndVerifySecret(secretStorage, getAccountSecretKey(account, 'bareToken'), '')
+}
+
+function setAndVerifySecret(secretStorage: ISecretStorage, key: string, value: string): void {
+    secretStorage.setSecret(key, value)
+    if (secretStorage.getSecret(key) !== value) {
+        throw new Error(`Failed to persist secret \"${key}\" in Obsidian SecretStorage`)
+    }
 }
