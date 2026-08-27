@@ -150,6 +150,36 @@ describe('JiraClient', () => {
             expect(results.issues[0].fields.issuetype.iconUrl).toContain('icon-object/svgs_raw/story/16.svg')
             expect(results.issues[0].fields.priority.iconUrl).toContain('icon/icons_raw/core/priority-medium.svg')
         })
+        test('getIssue handles avatarUrls missing 16x16 resolution without crashing', async () => {
+            const rawIssueResponse = {
+                key: 'TEST-103',
+                fields: {
+                    summary: 'Test summary without 16x16 avatars',
+                    issuetype: { name: 'Bug', iconUrl: 'https://test-company.atlassian.net/secure/viewavatar?size=xsmall&avatarId=10303' },
+                    reporter: {
+                        displayName: 'Alice',
+                        avatarUrls: { '48x48': 'https://test-company.atlassian.net/secure/useravatar?size=large' }
+                    },
+                    assignee: {
+                        displayName: 'Bob',
+                        avatarUrls: { '48x48': 'https://test-company.atlassian.net/secure/useravatar?size=large' }
+                    },
+                    status: { name: 'In Progress', statusCategory: { colorName: 'blue-gray' } },
+                }
+            }
+
+            requestUrlMock.mockResolvedValueOnce({
+                status: 200,
+                headers: defaultHeaders,
+                json: rawIssueResponse,
+            } as any)
+
+            const issue = await JiraClient.getIssue('TEST-103', { account: TestAccountOpen })
+
+            expect(issue.key).toEqual('TEST-103')
+            expect(issue.fields.reporter.avatarUrls['16x16']).toBeUndefined()
+            expect(issue.fields.assignee.avatarUrls['16x16']).toBeUndefined()
+        })
         })
     })
 
