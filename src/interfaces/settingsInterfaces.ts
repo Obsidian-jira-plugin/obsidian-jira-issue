@@ -85,6 +85,7 @@ export interface IJiraIssueAccountSettings {
     priority: number
     color: string
     use2025Api: boolean
+    disableImageFetch?: boolean
     cache: {
         statusColor: Record<string, string>
         customFieldsIdToName: Record<string, string>

@@ -16,8 +16,10 @@ const StoredSettings = {
         password: 'passwordVal',
         color: 'colorVal',
         host: 'hostVal',
+        webBaseUrl: '',
         bareToken: 'bareToken',
         use2025Api: false,
+        disableImageFetch: false,
     }],
     apiBasePath: 'apiBasePathVal',
     cache: {

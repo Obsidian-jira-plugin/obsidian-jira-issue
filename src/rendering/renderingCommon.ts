@@ -6,6 +6,17 @@ import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
 import { scheduleOverflowElementRefresh } from "./overflowText"
 
+export {
+    JIRA_ISSUE_ICON_SVG_BASE_URL,
+    JIRA_PRIORITY_ICON_SVG_BASE_URL,
+    generateJiraIssueTypeSvgURL,
+    generateJiraIssuePrioritySvgURL,
+    JIRA_ISSUE_TYPE_ICON_MAP,
+    JIRA_PRIORITY_ICON_MAP,
+    JIRA_DEFAULT_ISSUE_ICON,
+    JIRA_DEFAULT_PRIORITY_ICON
+} from "./jiraIcons"
+
 export const JIRA_STATUS_COLOR_MAP: Record<string, string> = {
     'blue-gray': 'is-info',
     'yellow': 'is-warning',

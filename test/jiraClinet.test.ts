@@ -52,6 +52,105 @@ describe('JiraClient', () => {
 
             expect(await JiraClient.testConnection(TestAccountOpen)).toEqual(true)
         })
+
+        test('getIssue with disableImageFetch uses upstream Atlassian SVG icons without fetching images', async () => {
+            const accountWithDisabledImages = {
+                ...TestAccountOpen,
+                disableImageFetch: true,
+            }
+            const rawIssueResponse = {
+                key: 'TEST-100',
+                fields: {
+                    summary: 'Test summary',
+                    issuetype: { name: 'Bug', iconUrl: 'https://jira.server.com/secure/viewavatar?size=xsmall&avatarId=10303' },
+                    priority: { name: 'High', iconUrl: 'https://jira.server.com/images/icons/priorities/high.svg' },
+                    reporter: {
+                        displayName: 'Alice',
+                        avatarUrls: { '16x16': 'https://jira.server.com/secure/useravatar?ownerId=alice' }
+                    },
+                    assignee: {
+                        displayName: 'Bob',
+                        avatarUrls: { '16x16': 'https://jira.server.com/secure/useravatar?ownerId=bob' }
+                    },
+                    status: { name: 'In Progress', statusCategory: { colorName: 'blue-gray' } },
+                }
+            }
+
+            requestUrlMock.mockResolvedValueOnce({
+                status: 200,
+                headers: defaultHeaders,
+                json: rawIssueResponse,
+            } as any)
+
+            const issue = await JiraClient.getIssue('TEST-100', { account: accountWithDisabledImages })
+
+            expect(requestUrlMock).toBeCalledTimes(1)
+            expect(issue.fields.issuetype.iconUrl).toContain('icon-object/svgs_raw/bug/16.svg')
+            expect(issue.fields.priority.iconUrl).toContain('icon/icons_raw/core/priority-high.svg')
+            expect(issue.fields.reporter.avatarUrls['16x16']).toEqual('')
+            expect(issue.fields.assignee.avatarUrls['16x16']).toEqual('')
+        })
+
+        test('getIssue with disableImageFetch handles sub-tasks and unknown types/priorities', async () => {
+            const accountWithDisabledImages = {
+                ...TestAccountOpen,
+                disableImageFetch: true,
+            }
+            const rawIssueResponse = {
+                key: 'TEST-101',
+                fields: {
+                    summary: 'Sub-task summary',
+                    issuetype: { name: 'Sub-task', iconUrl: 'https://jira.server.com/subtask.png' },
+                    priority: { name: 'NonExistentPriority', iconUrl: 'https://jira.server.com/priority.png' },
+                    status: { name: 'Open', statusCategory: { colorName: 'blue-gray' } },
+                }
+            }
+
+            requestUrlMock.mockResolvedValueOnce({
+                status: 200,
+                headers: defaultHeaders,
+                json: rawIssueResponse,
+            } as any)
+
+            const issue = await JiraClient.getIssue('TEST-101', { account: accountWithDisabledImages })
+
+            expect(requestUrlMock).toBeCalledTimes(1)
+            expect(issue.fields.issuetype.iconUrl).toContain('icon-object/svgs_raw/subtask/16.svg')
+            expect(issue.fields.priority.iconUrl).toContain('icon/icons_raw/core/question-circle.svg')
+        })
+
+        test('getSearchResults with disableImageFetch maps icons without fetching images', async () => {
+            const accountWithDisabledImages = {
+                ...TestAccountOpen,
+                disableImageFetch: true,
+            }
+            const rawSearchResponse = {
+                issues: [
+                    {
+                        key: 'TEST-102',
+                        fields: {
+                            summary: 'Search issue summary',
+                            issuetype: { name: 'Story', iconUrl: 'https://jira.server.com/story.png' },
+                            priority: { name: 'Medium', iconUrl: 'https://jira.server.com/medium.png' },
+                            status: { name: 'Done', statusCategory: { colorName: 'green' } },
+                        }
+                    }
+                ]
+            }
+
+            requestUrlMock.mockResolvedValueOnce({
+                status: 200,
+                headers: defaultHeaders,
+                json: rawSearchResponse,
+            } as any)
+
+            const results = await JiraClient.getSearchResults('project = TEST', { account: accountWithDisabledImages })
+
+            expect(requestUrlMock).toBeCalledTimes(1)
+            expect(results.issues[0].fields.issuetype.iconUrl).toContain('icon-object/svgs_raw/story/16.svg')
+            expect(results.issues[0].fields.priority.iconUrl).toContain('icon/icons_raw/core/priority-medium.svg')
+        })
+        })
     })
 
     describe('Negative tests', () => {
