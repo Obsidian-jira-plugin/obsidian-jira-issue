@@ -180,7 +180,6 @@ describe('JiraClient', () => {
             expect(issue.fields.reporter.avatarUrls['16x16']).toBeUndefined()
             expect(issue.fields.assignee.avatarUrls['16x16']).toBeUndefined()
         })
-        })
     })
 
     describe('Negative tests', () => {
