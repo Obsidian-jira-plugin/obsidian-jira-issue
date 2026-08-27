@@ -119,6 +119,50 @@ describe('Settings', () => {
         await settingTab.saveSettings({ isVisualOnly: true })
         expect(listener).toHaveBeenCalledWith({ isVisualOnly: true })
     })
+    test('saveSettings strips credentials from saveData in KEYCHAIN mode', async () => {
+        const mockApp = {
+            secretStorage: {
+                setSecret: jest.fn(),
+                getSecret: jest.fn(),
+                deleteSecret: jest.fn(),
+            },
+            workspace: {
+                iterateAllLeaves: jest.fn(),
+            },
+        } as unknown as any
+
+        const customPluginMock = {
+            loadData: jest.fn(),
+            saveData: jest.fn(),
+        }
+        const customSettingTab = new JiraIssueSettingTab(mockApp, customPluginMock as any)
+
+        SettingsData.credentialStorageType = ECredentialStorageType.KEYCHAIN
+        SettingsData.accounts = [{
+            ...DEFAULT_ACCOUNT,
+            id: 'test-acc-1',
+            alias: 'TestAccount',
+            password: 'secretPassword123',
+            bareToken: 'secretToken456',
+            encryptedPassword: 'encPassword',
+            encryptedBareToken: 'encToken',
+        }]
+
+        await customSettingTab.saveSettings()
+
+        expect(mockApp.secretStorage.setSecret).toHaveBeenCalledWith('jira-issue-test-acc-1-password', 'secretPassword123')
+        expect(mockApp.secretStorage.setSecret).toHaveBeenCalledWith('jira-issue-test-acc-1-baretoken', 'secretToken456')
+
+        expect(customPluginMock.saveData).toHaveBeenCalledTimes(1)
+        const savedData = customPluginMock.saveData.mock.calls[0][0]
+        expect(savedData.accounts[0].password).toBeUndefined()
+        expect(savedData.accounts[0].bareToken).toBeUndefined()
+        expect(savedData.accounts[0].encryptedPassword).toBeUndefined()
+        expect(savedData.accounts[0].encryptedBareToken).toBeUndefined()
+        expect(savedData.accounts[0].alias).toEqual('TestAccount')
+        expect(SettingsData.accounts[0].password).toEqual('secretPassword123')
+        expect(SettingsData.accounts[0].bareToken).toEqual('secretToken456')
+    })
     test.todo('loadSettings legacy account migration')
     test.todo('createNewEmptyAccount')
     test.todo('accountsConflictsFix')

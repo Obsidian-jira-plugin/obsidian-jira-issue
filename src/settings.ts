@@ -213,6 +213,13 @@ export class JiraIssueSettingTab extends PluginSettingTab {
             for (const account of SettingsData.accounts) {
                 await saveAccountSecrets(this.app, account)
             }
+            // Strip raw secrets from data.json
+            for (const account of settingsToStore.accounts) {
+                delete account.password
+                delete account.bareToken
+                delete account.encryptedPassword
+                delete account.encryptedBareToken
+            }
         } else if (SettingsData.credentialStorageType === ECredentialStorageType.PASSPHRASE) {
             if (isSecretStorageAvailable(this.app)) {
                 for (const account of SettingsData.accounts) {
