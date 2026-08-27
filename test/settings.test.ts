@@ -120,11 +120,15 @@ describe('Settings', () => {
         expect(listener).toHaveBeenCalledWith({ isVisualOnly: true })
     })
     test('saveSettings strips credentials from saveData in KEYCHAIN mode', async () => {
+        const secretMap = new Map<string, string>()
         const mockApp = {
             secretStorage: {
-                setSecret: jest.fn(),
-                getSecret: jest.fn(),
-                deleteSecret: jest.fn(),
+                setSecret: jest.fn((key: string, val: string) => {
+                    secretMap.set(key, val)
+                }),
+                getSecret: jest.fn((key: string) => {
+                    return secretMap.get(key) || null
+                }),
             },
             workspace: {
                 iterateAllLeaves: jest.fn(),
