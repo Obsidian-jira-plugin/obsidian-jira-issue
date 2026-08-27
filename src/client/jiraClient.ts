@@ -95,7 +95,21 @@ function getResponseHeader(response: RequestUrlResponse, headerName: string): st
 }
 
 function hasJsonBody(response: RequestUrlResponse): boolean {
-    return response && response.json !== undefined && response.json !== null
+    if (!response) {
+        return false
+    }
+    if (response.json !== undefined && response.json !== null) {
+        return true
+    }
+    if (typeof response.text === 'string' && response.text.trim()) {
+        try {
+            response.json = JSON.parse(response.text)
+            return true
+        } catch {
+            return false
+        }
+    }
+    return false
 }
 
 function isTextResponse(response: RequestUrlResponse): boolean {
