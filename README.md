@@ -37,7 +37,10 @@ From the obsidian app go in `Settings > Third-party plugins > Community Plugins 
 
 ## Configuration
 
-Use the plugin options to configure the connection to your Atlassian Jira server: host, username and password.
+Use the plugin options to configure the connection to your Atlassian Jira server: host, authentication type, and optional account settings.
+
+- **Web Base URL:** Optional browser-facing base URL used for links rendered in notes (useful when your public web address differs from the internal API endpoint or reverse proxy).
+- **Disable Icon Fetching:** Per-account toggle to disable downloading icons and avatars from the Jira server and instead use upstream official Atlassian SVG icons.
 
 [Read more...](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/get-started/basic-authentication)
 

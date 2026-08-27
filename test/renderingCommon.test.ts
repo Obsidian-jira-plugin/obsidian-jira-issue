@@ -13,7 +13,7 @@ jest.mock('../src/settings', () => {
 })
 
 import { SettingsData } from '../src/settings'
-import RC from '../src/rendering/renderingCommon'
+import RC, { JIRA_DEFAULT_ISSUE_ICON, JIRA_DEFAULT_PRIORITY_ICON, JIRA_ISSUE_TYPE_ICON_MAP, JIRA_PRIORITY_ICON_MAP } from '../src/rendering/renderingCommon'
 import { EColorSchema } from '../src/interfaces/settingsInterfaces'
 import * as main from '../src/main'
 import { TestAccountOpen } from './testData'
@@ -131,6 +131,35 @@ describe('RenderingCommon', () => {
 
             expect(renderedIssue.children.some(child => child.className.includes('issue-summary'))).toEqual(false)
             expect(renderedIssue.children.some(child => child.className.includes('issue-status'))).toEqual(true)
+        })
+    })
+
+    describe('web links', () => {
+        test('uses webBaseUrl and strips trailing slashes', () => {
+            const account = { ...TestAccountOpen, webBaseUrl: 'https://jira.mycompany.com///' }
+
+            expect(RC.issueUrl(account, 'AAA-123')).toBe('https://jira.mycompany.com/browse/AAA-123')
+            expect(RC.searchUrl(account, 'project = TEST')).toBe('https://jira.mycompany.com/issues/?jql=project%20=%20TEST')
+        })
+
+        test('falls back to host when webBaseUrl is empty', () => {
+            const account = { ...TestAccountOpen, webBaseUrl: '', host: 'https://jira.mycompany.com///' }
+
+            expect(RC.issueUrl(account, 'AAA-123')).toBe('https://jira.mycompany.com/browse/AAA-123')
+            expect(RC.searchUrl(account, 'project = TEST')).toBe('https://jira.mycompany.com/issues/?jql=project%20=%20TEST')
+        })
+    })
+
+    describe('icon mappings', () => {
+        test('contains standard Jira issue type and priority SVG URLs', () => {
+            expect(JIRA_ISSUE_TYPE_ICON_MAP['bug']).toContain('icon-object/svgs_raw/bug/16.svg')
+            expect(JIRA_ISSUE_TYPE_ICON_MAP['task']).toContain('icon-object/svgs_raw/task/16.svg')
+            expect(JIRA_ISSUE_TYPE_ICON_MAP['subtask']).toContain('icon-object/svgs_raw/subtask/16.svg')
+            expect(JIRA_DEFAULT_ISSUE_ICON).toBe(JIRA_ISSUE_TYPE_ICON_MAP['issue'])
+
+            expect(JIRA_PRIORITY_ICON_MAP['high']).toContain('icon/icons_raw/core/priority-high.svg')
+            expect(JIRA_PRIORITY_ICON_MAP['critical']).toContain('icon/icons_raw/core/priority-critical.svg')
+            expect(JIRA_DEFAULT_PRIORITY_ICON).toContain('icon/icons_raw/core/question-circle.svg')
         })
     })
 

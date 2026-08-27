@@ -61,11 +61,13 @@ export const DEFAULT_ACCOUNT: IJiraIssueAccountSettings = {
     id: '',
     alias: 'Default',
     host: 'https://mycompany.atlassian.net',
+    webBaseUrl: '',
     authenticationType: EAuthenticationTypes.OPEN,
     password: '',
     priority: 1,
     color: '#000000',
     use2025Api: false,
+    disableImageFetch: false,
     cache: {
         statusColor: {},
         customFieldsIdToName: {},
@@ -127,6 +129,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                         id: generateAccountId(),
                         priority: 1,
                         host: SettingsData.host,
+                        webBaseUrl: DEFAULT_ACCOUNT.webBaseUrl,
                         authenticationType: SettingsData.authenticationType,
                         username: SettingsData.username,
                         password: SettingsData.password,
@@ -135,6 +138,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                         color: DEFAULT_ACCOUNT.color,
                         cache: DEFAULT_ACCOUNT.cache,
                         use2025Api: false,
+                        disableImageFetch: DEFAULT_ACCOUNT.disableImageFetch,
                     }
                 ]
             } else {
@@ -544,6 +548,16 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .setValue(newAccount.use2025Api)
                 .onChange(async value => {
                     newAccount.use2025Api = value
+                    await this.saveSettings()
+                }))
+
+        new Setting(containerEl)
+            .setName('Disable icon fetching')
+            .setDesc('Disable fetching of icons (e.g. issue type, priority) from this Jira server and instead use official icons from Atlassian.')
+            .addToggle(toggle => toggle
+                .setValue(newAccount.disableImageFetch ?? false)
+                .onChange(async value => {
+                    newAccount.disableImageFetch = value
                     await this.saveSettings()
                 }))
 
