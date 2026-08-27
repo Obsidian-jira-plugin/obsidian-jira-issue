@@ -54,9 +54,11 @@ export default class JiraIssuePlugin extends Plugin {
         this._inlineIssueViewPlugin.getViewPlugins().forEach(vp => this.registerEditorExtension(vp))
 
         // Settings refresh
-        this._settingTab.onChange(() => {
-            ObjectsCache.clear()
-            JiraClient.updateCustomFieldsCache()
+        this._settingTab.onChange((options?: { isVisualOnly?: boolean }) => {
+            if (!options?.isVisualOnly) {
+                ObjectsCache.clear()
+                JiraClient.updateCustomFieldsCache()
+            }
             this._inlineIssueViewPlugin.update()
             applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
         })

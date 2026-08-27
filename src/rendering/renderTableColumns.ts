@@ -438,6 +438,10 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
     return null
 }
 
+export const VIRTUAL_EPIC_ALIASES = ['EPIC', 'EPIC LINK', 'EPIC NAME', 'EPIC_LINK', 'EPIC_NAME']
+export const VIRTUAL_PARENT_ALIASES = ['PARENT', 'PARENT LINK', 'PARENT NAME', 'PARENT_LINK', 'PARENT_NAME']
+export const VIRTUAL_CUSTOM_FIELD_ALIASES = [...VIRTUAL_EPIC_ALIASES, ...VIRTUAL_PARENT_ALIASES]
+
 async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement): Promise<void> {
     const rawField = customField
     if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
@@ -447,7 +451,7 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
     const fieldUpper = rawField.toUpperCase()
 
     // 1. Epic Link / Epic Name virtual column
-    if (customField === 'VIRTUAL_EPIC_NAME' || ['EPIC NAME', 'EPIC LINK', 'EPIC_NAME', 'EPIC_LINK'].includes(fieldUpper)) {
+    if (customField === 'VIRTUAL_EPIC_NAME' || VIRTUAL_EPIC_ALIASES.includes(fieldUpper)) {
         const epic = await resolveEpic(issue)
         if (epic && (epic.key || epic.summary)) {
             const epicKey = epic.key
@@ -485,7 +489,7 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
     }
 
     // 2. Parent / Parent Link virtual column (immediate parent task/story)
-    if (customField === 'VIRTUAL_PARENT' || ['PARENT', 'PARENT LINK', 'PARENT_LINK', 'PARENT NAME', 'PARENT_NAME'].includes(fieldUpper)) {
+    if (customField === 'VIRTUAL_PARENT' || VIRTUAL_PARENT_ALIASES.includes(fieldUpper)) {
         if (issue.fields?.parent) {
             const parentKey = issue.fields.parent.key
             const parentSummary = issue.fields.parent.fields?.summary

@@ -1,4 +1,4 @@
-import { RangeSet, StateField } from "@codemirror/state"
+import { RangeSet, StateEffect, StateField } from "@codemirror/state"
 import { Decoration, DecorationSet, EditorView, MatchDecorator, PluginSpec, PluginValue, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view"
 import { editorLivePreviewField } from "obsidian"
 import JiraClient from "../client/jiraClient"
@@ -6,16 +6,21 @@ import { IJiraIssue } from "../interfaces/issueInterfaces"
 import ObjectsCache from "../objectsCache"
 import { SettingsData } from "../settings"
 import RC from "./renderingCommon"
-import escapeStringRegexp from 'escape-string-regexp'
 import { getAccountByHost } from "../utils"
-import { COMPACT_SYMBOL, JIRA_KEY_REGEX } from "../interfaces/settingsInterfaces"
+import { COMPACT_SYMBOL, ERenderStyle, JIRA_KEY_REGEX } from "../interfaces/settingsInterfaces"
+
+export const refreshInlineIssuesEffect = StateEffect.define<void>()
+
+function getRenderStyleClass(): string {
+    return SettingsData.renderStyle === ERenderStyle.CLASSIC ? 'ji-style-classic' : 'ji-style-modern'
+}
 
 interface IMatchDecoratorRef {
     ref: MatchDecorator
 }
 
 function escapeRegexp(str: string): string {
-    return escapeStringRegexp(str).replace(/\//g, '\\/')
+    return str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/\//g, '\\/')
 }
 
 const isEditorInLivePreviewMode = (view: EditorView) => view.state.field(editorLivePreviewField as unknown as StateField<boolean>)
@@ -39,7 +44,7 @@ class InlineIssueWidget extends WidgetType {
         this._issueKey = key
         this._compact = compact
         this._host = host
-        this._htmlContainer = createSpan({ cls: 'ji-inline-issue jira-issue-container' })
+        this._htmlContainer = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}` })
         this.buildTag()
     }
 
@@ -69,8 +74,8 @@ class InlineIssueWidget extends WidgetType {
 }
 
 // Global variable with the last instance of the MatchDecorator rebuilt every time the settings are changed
-let jiraTagMatchDecorator: IMatchDecoratorRef = { ref: null }
-let jiraUrlMatchDecorator: IMatchDecoratorRef = { ref: null }
+const jiraTagMatchDecorator: IMatchDecoratorRef = { ref: null }
+const jiraUrlMatchDecorator: IMatchDecoratorRef = { ref: null }
 
 function buildMatchDecorators() {
     if (SettingsData.inlineIssuePrefix !== '') {
@@ -133,7 +138,8 @@ function buildViewPluginClass(matchDecorator: IMatchDecoratorRef) {
 
         update(update: ViewUpdate): void {
             const editorModeChanged = update.startState.field(editorLivePreviewField as unknown as StateField<boolean>) !== update.state.field(editorLivePreviewField as unknown as StateField<boolean>)
-            if (update.docChanged || update.startState.selection.main !== update.state.selection.main || editorModeChanged) {
+            const hasRefreshEffect = update.transactions.some(tr => tr.effects.some(e => e.is(refreshInlineIssuesEffect)))
+            if (update.docChanged || update.startState.selection.main !== update.state.selection.main || editorModeChanged || hasRefreshEffect) {
                 this.decorators = matchDecorator.ref ? matchDecorator.ref.createDeco(update.view) : RangeSet.empty
             }
         }

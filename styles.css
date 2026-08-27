@@ -5,6 +5,7 @@
     line-height: 1em;
     flex-direction: column;
     margin-bottom: 10px;
+    gap: 6px;
     vertical-align: middle;
 }
 
@@ -415,8 +416,10 @@ th {
 
 /* Inline Issues */
 .jira-issue-container.ji-inline-issue {
-    display: inline-block;
-    margin: 0;
+    display: inline-flex;
+    margin: 0 4px;
+    vertical-align: middle;
+    gap: 0;
 }
 
 .jira-issue-container.ji-inline-issue .ji-tag {
@@ -560,4 +563,141 @@ svg.svg-icon.jira-issue-visible {
 svg.svg-icon.jira-issue-hidden {
     stroke: none;
     fill: currentColor;
+}
+
+
+/* Modern Theme Styling */
+.jira-issue-container.ji-style-modern .ji-tag:not(.is-danger):not(.is-warning):not(.is-success):not(.is-info):not(.is-link):not(.is-delete),
+.jira-issue-container:not(.ji-style-classic) .ji-tag:not(.is-danger):not(.is-warning):not(.is-success):not(.is-info):not(.is-link):not(.is-delete) {
+    font-size: 0.82em;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border, #e0e0e0);
+    background-color: var(--background-secondary, #f8f9fa);
+    color: var(--text-normal, #333333);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.is-link,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.is-link {
+    font-weight: 600;
+    color: var(--text-accent, #485fc7);
+    background-color: var(--background-secondary-alt, #edf2fc);
+    border-color: var(--background-modifier-border-focus, #c0d1f7);
+}
+
+/* Modern Error Badges (Light Mode) */
+.jira-issue-container.ji-style-modern .ji-tag.is-danger,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger {
+    background-color: #ffebe6;
+    color: #de350b;
+    border-color: #ffbdad;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.is-danger.is-light,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger.is-light {
+    background-color: #fff0ed;
+    color: #bf2600;
+    border-color: #ffbdad;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.is-delete.is-danger,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.is-delete.is-danger {
+    background-color: #de350b;
+    color: #ffffff;
+    border-color: #de350b;
+}
+
+/* Modern Pastel Status Badges (Light Mode) */
+.jira-issue-container.ji-style-modern .ji-tag.issue-status.is-info,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-info {
+    background-color: #deebff;
+    color: #0747a6;
+    border-color: #b3d4ff;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.issue-status.is-success,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-success {
+    background-color: #e3fcef;
+    color: #006644;
+    border-color: #abf5d1;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.issue-status.is-warning,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-warning {
+    background-color: #fffae6;
+    color: #172b4d;
+    border-color: #ffe380;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.issue-status.is-danger,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-danger {
+    background-color: #ffebe6;
+    color: #de350b;
+    border-color: #ffbdad;
+}
+
+.jira-issue-container.ji-style-modern .ji-tag.issue-status.is-dark,
+.jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-dark {
+    background-color: #dfe1e6;
+    color: #42526e;
+    border-color: #c1c7d0;
+}
+
+/* Modern Error Badges (Dark Mode) */
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.is-danger,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger {
+    background-color: #4a1d1d;
+    color: #ff8f73;
+    border-color: #632626;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.is-danger.is-light,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.is-danger.is-light {
+    background-color: #3b1414;
+    color: #ff8f73;
+    border-color: #632626;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.is-delete.is-danger,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.is-delete.is-danger {
+    background-color: #de350b;
+    color: #ffffff;
+    border-color: #de350b;
+}
+
+/* Modern Pastel Status Badges (Dark Mode) */
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.issue-status.is-info,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-info {
+    background-color: #1d3a5f;
+    color: #4c9aff;
+    border-color: #264977;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.issue-status.is-success,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-success {
+    background-color: #1b4332;
+    color: #57d9a3;
+    border-color: #275943;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.issue-status.is-warning,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-warning {
+    background-color: #3d371d;
+    color: #ffe380;
+    border-color: #544b26;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.issue-status.is-danger,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-danger {
+    background-color: #4a1d1d;
+    color: #ff8f73;
+    border-color: #632626;
+}
+
+.theme-dark .jira-issue-container.ji-style-modern .ji-tag.issue-status.is-dark,
+.theme-dark .jira-issue-container:not(.ji-style-classic) .ji-tag.issue-status.is-dark {
+    background-color: #2c333f;
+    color: #a5adba;
+    border-color: #3e4756;
 }

@@ -75,6 +75,7 @@ describe('Settings', () => {
         expect(SettingsData).toEqual({
             ...StoredSettings,
             credentialStorageType: ECredentialStorageType.PLAINTEXT,
+            renderStyle: DEFAULT_SETTINGS.renderStyle,
             issueSummaryMaxWidthRem: DEFAULT_SETTINGS.issueSummaryMaxWidthRem,
             issueStatusMaxWidthRem: DEFAULT_SETTINGS.issueStatusMaxWidthRem,
             accounts: [{
@@ -112,8 +113,61 @@ describe('Settings', () => {
         expect(SettingsData.issueSummaryMaxWidthRem).toEqual(DEFAULT_SETTINGS.issueSummaryMaxWidthRem)
         expect(SettingsData.issueStatusMaxWidthRem).toEqual(DEFAULT_SETTINGS.issueStatusMaxWidthRem)
     })
+    test('saveSettings calls onChange listener with options', async () => {
+        const listener = jest.fn()
+        settingTab.onChange(listener)
+        await settingTab.saveSettings({ isVisualOnly: true })
+        expect(listener).toHaveBeenCalledWith({ isVisualOnly: true })
+    })
+    test('saveSettings strips credentials from saveData in KEYCHAIN mode', async () => {
+        const secretMap = new Map<string, string>()
+        const mockApp = {
+            secretStorage: {
+                setSecret: jest.fn((key: string, val: string) => {
+                    secretMap.set(key, val)
+                }),
+                getSecret: jest.fn((key: string) => {
+                    return secretMap.get(key) || null
+                }),
+            },
+            workspace: {
+                iterateAllLeaves: jest.fn(),
+            },
+        } as unknown as any
+
+        const customPluginMock = {
+            loadData: jest.fn(),
+            saveData: jest.fn(),
+        }
+        const customSettingTab = new JiraIssueSettingTab(mockApp, customPluginMock as any)
+
+        SettingsData.credentialStorageType = ECredentialStorageType.KEYCHAIN
+        SettingsData.accounts = [{
+            ...DEFAULT_ACCOUNT,
+            id: 'test-acc-1',
+            alias: 'TestAccount',
+            password: 'secretPassword123',
+            bareToken: 'secretToken456',
+            encryptedPassword: 'encPassword',
+            encryptedBareToken: 'encToken',
+        }]
+
+        await customSettingTab.saveSettings()
+
+        expect(mockApp.secretStorage.setSecret).toHaveBeenCalledWith('jira-issue-test-acc-1-password', 'secretPassword123')
+        expect(mockApp.secretStorage.setSecret).toHaveBeenCalledWith('jira-issue-test-acc-1-baretoken', 'secretToken456')
+
+        expect(customPluginMock.saveData).toHaveBeenCalledTimes(1)
+        const savedData = customPluginMock.saveData.mock.calls[0][0]
+        expect(savedData.accounts[0].password).toBeUndefined()
+        expect(savedData.accounts[0].bareToken).toBeUndefined()
+        expect(savedData.accounts[0].encryptedPassword).toBeUndefined()
+        expect(savedData.accounts[0].encryptedBareToken).toBeUndefined()
+        expect(savedData.accounts[0].alias).toEqual('TestAccount')
+        expect(SettingsData.accounts[0].password).toEqual('secretPassword123')
+        expect(SettingsData.accounts[0].bareToken).toEqual('secretToken456')
+    })
     test.todo('loadSettings legacy account migration')
-    test.todo('saveSettings')
     test.todo('createNewEmptyAccount')
     test.todo('accountsConflictsFix')
     test.todo('createPriorityOptions')
