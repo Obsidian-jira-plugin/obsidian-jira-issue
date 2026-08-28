@@ -12,9 +12,16 @@ You can override this setting in the `jira-search` fence by using the `limit` at
 
 [Read more...](/docs/components/jira-search)
 
+## Render style
+
+This setting allows you to choose the visual appearance of Jira tags, inline issues, and status badges across your notes:
+
+- **Modern (Default):** Designed specifically to blend natively with Obsidian themes. Uses refined typography, theme-adaptive borders, and soft pastel status badges with high legibility in both light and dark themes. Changes apply instantly in both Reading View and Live Preview.
+- **Classic:** The legacy style using high-contrast, fully-colored Bulma-inspired badges.
+
 ## Color schema
 
-This setting allows you to enable the dark/light mode of the plugin components rendering.
+This setting allows you to enable the dark/light mode of the plugin components rendering, or have it follow your Obsidian theme automatically (`Follow Obsidian`, `Light`, `Dark`).
 
 Examples:
 
@@ -61,3 +68,11 @@ This setting limits the width of issue statuses in tags. The value is expressed 
 Statuses wider than the configured limit use the same automatic scrolling behavior as issue summaries. The issue key and icons always remain fixed.
 
 The full summary and status remain available as a tooltip. When reduced motion is enabled in the operating system, automatic scrolling is disabled and overflowing text remains truncated with an ellipsis.
+
+## Show color band
+
+Display an account-specific color strip on the left border of inline issues, making it easy to identify at a glance which Jira account or organization an issue belongs to.
+
+## Show Jira link
+
+When enabled, the result count text in the footer of `jira-search` tables becomes a direct clickable link to your Jira instance executing the exact JQL search query.

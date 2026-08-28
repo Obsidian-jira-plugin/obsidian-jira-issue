@@ -66,9 +66,9 @@ columns: key, -key, type, -type, reporter, -reporter, created, -created
 ````
 ![Compact Columns](/img/compactColumns.png)
 
-## Custom fields
+## Custom fields & Epic / Parent Aliases
 
-Jira non standard fields (a.k.a. custom fields) can be inserted using the `$` symbol.
+Jira non-standard fields (a.k.a. custom fields) can be inserted using the `$` symbol, specifying either the custom field name or ID number.
 
 Example:
 ````
@@ -78,7 +78,18 @@ columns: key, summary, $Epic Link, $Global Rank, $12313422, -$12313499
 ```
 ````
 
-It is possible to provide the ID number of the custom field or its name.
+### Built-in Epic & Parent Aliases
+
+To provide universal compatibility across both Jira Cloud and Jira Server / Data Center, the plugin features smart alias resolution for Epic and Parent relationships:
+
+| Alias | Description | Resolution Strategy |
+| :- | :- | :- |
+| `$Epic Link` or `$Epic Name` | Displays the Epic the issue belongs to as a colorized clickable pill | Automatically queries the Jira Cloud `parent` (if type is Epic) or Jira Server custom fields (`customfield_XXXXX`). |
+| `$Parent` or `$Parent Link` | Displays the parent issue (for subtasks or hierarchy levels) | Resolves the Jira `parent` field and falls back to Epic links. |
+
+- If compact mode (`-$Epic Link`) is used, only the Epic key is rendered in a pill badge.
+- When an Epic defines a color in Jira, the pill dynamically adopts that color.
+- If the issue is a subtask whose direct parent is inside an Epic, the plugin recursively resolves the parent hierarchy.
 
 ## Link to notes
 The special column `NOTES` can be used with `jira-search` tables to create a column that shows all the notes that start with the issue key.

@@ -3,14 +3,18 @@ sidebar_position: 1
 ---
 # Introduction
 
+:::info Acknowledgement & Maintenance
+This plugin was originally created and maintained by [**@marc0l92 (Marc)**](https://github.com/marc0l92), to whom the entire Obsidian and Jira community is deeply grateful for his dedication and foundational work.
+
+The project is now actively maintained and developed by the **[Obsidian-jira-plugin](https://github.com/Obsidian-jira-plugin)** community team.
+:::
+
 ## Why this plugin?
-As a developer that works in a IT company I work every day on many topics that I love to record and document in my notes.
+As developers and knowledge workers, we work every day on many topics that we love to record and document in our notes.
 
-I evaluated several note taking applications, but the one that I found more compatible with a working environment workflow is [Obsidian.md](https://obsidian.md/).
+Obsidian.md is a powerful note-taking app that fits a modern knowledge workflow. With this plugin, you can connect your notes directly with [Atlassian Jira](https://www.atlassian.com/software/jira) issues: monitor issue statuses, embed search results and dashboards, and link user stories seamlessly.
 
-With this plugin I wanted to connect my notes with the word of [Atlassian Jira](https://www.atlassian.com/software/jira) issues that I work on, in order to be able to monitor the user story I create but also link user stories that I'm working on.
-
-The plugin is inspired by the integration between Confluence and Jira, and I wanted to reproduce the same style in order to create something that Atlassian user are familiar with.
+The plugin provides a clean, native integration inspired by Jira and Confluence, supporting modern styling, secure credential storage, offline fallback icons, and flexible link routing.
 
 ## Who is this plugin for?
 

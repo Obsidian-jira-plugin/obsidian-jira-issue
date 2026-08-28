@@ -310,7 +310,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         description.appendText('Need help? Explore the ')
         description.appendChild(createEl('a', {
             text: 'Jira Issue documentation',
-            href: 'https://marc0l92.github.io/obsidian-jira-issue/',
+            href: 'https://obsidian-jira-plugin.github.io/obsidian-jira-issue/',
         }))
         description.appendText('.')
 
@@ -320,14 +320,14 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         const { containerEl } = this
         containerEl.createEl('h3', { text: 'Support development' })
         const description = containerEl.createEl('p')
-        description.appendText('If you enjoy JiraIssue, consider giving me your feedback on the ')
+        description.appendText('If you enjoy Jira Issue, consider giving feedback on the ')
         description.appendChild(createEl('a', {
-            text: 'github repository',
-            href: 'https://github.com/marc0l92/obsidian-jira-issue/issues',
+            text: 'GitHub repository',
+            href: 'https://github.com/Obsidian-jira-plugin/obsidian-jira-issue/issues',
         }))
         description.appendText(', and maybe ')
         description.appendChild(createEl('a', {
-            text: 'buying me a coffee',
+            text: 'buying Marc a coffee',
             href: 'https://ko-fi.com/marc0l92',
         }))
         description.appendText(' ☕.')

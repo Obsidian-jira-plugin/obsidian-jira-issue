@@ -18,8 +18,8 @@ The installation of the plugin is standard and it is the same as all the other c
 
 ## Manual installation
 
-- Access the [GitHub releases page](https://github.com/marc0l92/obsidian-jira-issue/releases)
-- Download from the last release the 3 files:
+- Access the [GitHub releases page](https://github.com/Obsidian-jira-plugin/obsidian-jira-issue/releases)
+- Download from the latest release the 3 files:
     - `main.js`
     - `manifest.json`
     - `styles.css`

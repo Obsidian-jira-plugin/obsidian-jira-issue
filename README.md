@@ -2,7 +2,7 @@
 ![Test Status](https://github.com/Obsidian-jira-plugin/obsidian-jira-issue/actions/workflows/ci.yaml/badge.svg)
 
 > ### 📢 Maintenance & Acknowledgement
-> This plugin was originally created and maintained by [**@marc0l92**](https://github.com/marc0l92), to whom the community is deeply grateful.
+> This plugin was originally created and maintained by [**@marc0l92 (Marc)**](https://github.com/marc0l92), to whom the entire community is deeply grateful for his dedication and foundational work.
 > 
 > It is now actively maintained and updated by the **[Obsidian-jira-plugin](https://github.com/Obsidian-jira-plugin)** community team.
 
@@ -37,10 +37,13 @@ From the obsidian app go in `Settings > Third-party plugins > Community Plugins 
 
 ## Configuration
 
-Use the plugin options to configure the connection to your Atlassian Jira server: host, authentication type, and optional account settings.
+Use the plugin settings (`Settings > Jira Issue`) to configure your Atlassian Jira connections, security preferences, and visual styling:
 
+- **Security & Credential Storage:** Choose between **OS Keychain (SecretStorage)** (desktop native), **Master Passphrase (AES-256-GCM)** (encrypted for synced vaults), or **Plaintext** (`data.json`).
+- **Render Style:** Choose **Modern** (soft pastel badges, Obsidian-native) or **Classic** (legacy Bulma tags).
 - **Web Base URL:** Optional browser-facing base URL used for links rendered in notes (useful when your public web address differs from the internal API endpoint or reverse proxy).
 - **Disable Icon Fetching:** Per-account toggle to disable downloading icons and avatars from the Jira server and instead use upstream official Atlassian SVG icons.
+- **Use 2025 search api:** Account toggle for modern Jira Cloud search API compatibility (prevents HTTP 410 errors).
 
 [Read more...](https://obsidian-jira-plugin.github.io/obsidian-jira-issue/docs/get-started/basic-authentication)
 
