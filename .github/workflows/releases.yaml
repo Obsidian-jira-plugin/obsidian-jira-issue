@@ -21,17 +21,17 @@ jobs:
 
       - uses: actions/setup-node@v3
         with:
-          node-version: "lts/*"
+          node-version: "20"
 
       - uses: pnpm/action-setup@v2
         with:
-          version: latest
+          version: 8
           run_install: false
 
       - name: Build
         id: build
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           pnpm run build
           mkdir ${{ env.PLUGIN_NAME }}
           cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}
