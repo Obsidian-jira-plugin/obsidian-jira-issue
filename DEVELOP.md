@@ -33,10 +33,11 @@ https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-sear
 
 ## Publish new release
 
-- Make sure test are running: `npm run test`
-- Define the new version to use x.y.z
-- Run: `npm run version x.y.z`
-- Commit and push the file modified
-- Tag the commit: `git tag x.y.z`
-- Push the tag: `git push --tags`
-- Publish to NPM: `npm publish`
+Releases are automated via GitHub Actions:
+- **Option A (Automated):** Trigger the `Manually create release` GitHub Action workflow with the desired tag name (e.g. `2.0.0`).
+- **Option B (Local):**
+  1. Make sure tests are passing: `pnpm run test`
+  2. Bump the version: `pnpm run version <x.y.z>`
+  3. Commit and push the modified files (`manifest.json`, `package.json`, `versions.json`)
+  4. Create and push the tag: `git tag <x.y.z> && git push --tags`
+  5. The `Create new release on new tag` workflow will automatically build and attach release assets.

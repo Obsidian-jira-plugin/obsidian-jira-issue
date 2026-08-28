@@ -3,31 +3,36 @@ sidebar_position: 3
 ---
 # Basic authentication
 
-Access the plugin options using and in the `Connection` section configure the `host` and `authentication`.
+Access the plugin options in `Settings > Jira Issue` to configure your Jira connection.
 
-## Host
-In case of Atlassian Jira Server or Jira Cloud the host is the base URL of your jira instance.
+## Host & Web Base URL
+- **Host:** The base API URL of your Jira instance (e.g., `https://mycompany.atlassian.net` or `https://jira.company.com`).
+- **Web Base URL:** *(Optional)* Set this if your browser-facing URL differs from the internal API host (e.g., when behind a reverse proxy or VPN).
 
 [Read more...](/docs/configuration/authentication#host)
 
 
 ## Authentication Types
 
-The authentication type depends on the type of Jira you use:
+The plugin supports four authentication modes:
 
-- `Open`: guest mode for open source projects
-- `Basic Authentication`: for Jira Server and Jira Cloud
+- `Open`: Guest mode for public open source Jira instances
+- `Basic Authentication`: Username and password for Jira Server / Jira Data Center
+- `Jira Cloud`: Email address and Atlassian API Token for Jira Cloud
+- `Bearer Token`: Personal Access Token (PAT) / OAuth2 Bearer token
 
 [Read more...](/docs/configuration/authentication#authentication-types)
 
-### Username and password
+### Jira Cloud API Tokens
 
-If you chose the `Basic Authentication` you need to provide the username and password to authenticate with the server.
+For Jira Cloud, enter your Atlassian account email as the **Email** and generate an API token from `Account Settings > Security > Create and manage API tokens` ([Official Documentation](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)).
 
-In case of Jira Server, the username and password are the same as you use to login.
+## Credential Storage & Security
 
-On the other hand, if you use Jira Cloud the username is your email and the password needs to be filled with an APIKey.
+Your passwords and tokens can be securely stored using:
+1. **OS Keychain (SecretStorage):** Native OS keychain storage for desktop.
+2. **Master Passphrase (AES-256-GCM):** Encrypted cross-device storage for synced vaults.
 
-You can create a new API token in Jira Cloud from `Account Settings > Security > Create and manage API tokens` ([Official Documentation](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)).
+You can configure your preferred storage method in `Settings > Jira Issue > Security`.
 
-[Read more...](/docs/configuration/authentication#username-and-password)
+[Read more...](/docs/configuration/authentication#security--credential-storage)
