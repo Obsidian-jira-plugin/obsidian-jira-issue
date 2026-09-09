@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting, TextComponent } from 'obsidian'
+import { App, Notice, PluginSettingTab, Setting, TextComponent, WorkspaceLeaf } from 'obsidian'
 import JiraClient from './client/jiraClient'
 import { COLOR_SCHEMA_DESCRIPTION, CREDENTIAL_STORAGE_TYPE_DESCRIPTION, EAuthenticationTypes, EColorSchema, ECredentialStorageType, ERenderStyle, RENDER_STYLE_DESCRIPTION, ESearchColumnsTypes, IJiraIssueAccountSettings, IJiraIssueSettings, SEARCH_COLUMNS_DESCRIPTION } from './interfaces/settingsInterfaces'
 import JiraIssuePlugin from './main'
@@ -201,14 +201,14 @@ export class JiraIssueSettingTab extends PluginSettingTab {
             if (account.encryptedPassword) {
                 try {
                     account.password = await decryptSecret(passphrase, account.encryptedPassword)
-                } catch (e) {
+                } catch {
                     new Notice('Jira Issue: Failed to decrypt password. Check Master Passphrase.')
                 }
             }
             if (account.encryptedBareToken) {
                 try {
                     account.bareToken = await decryptSecret(passphrase, account.encryptedBareToken)
-                } catch (e) {
+                } catch {
                     new Notice('Jira Issue: Failed to decrypt token. Check Master Passphrase.')
                 }
             }
@@ -282,12 +282,13 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         }
 
         // Delete old properties
-        delete (settingsToStore as any)['darkMode']
-        delete (settingsToStore as any)['host']
-        delete (settingsToStore as any)['authenticationType']
-        delete (settingsToStore as any)['username']
-        delete (settingsToStore as any)['password']
-        delete (settingsToStore as any)['customFieldsNames']
+        const legacySettingsToStore = settingsToStore as unknown as Record<string, unknown>
+        delete legacySettingsToStore['darkMode']
+        delete legacySettingsToStore['host']
+        delete legacySettingsToStore['authenticationType']
+        delete legacySettingsToStore['username']
+        delete legacySettingsToStore['password']
+        delete legacySettingsToStore['customFieldsNames']
 
         await this._plugin.saveData(settingsToStore)
 
@@ -295,12 +296,14 @@ export class JiraIssueSettingTab extends PluginSettingTab {
             this._onChangeListener(options)
         }
         if (this.app && this.app.workspace) {
-            this.app.workspace.iterateAllLeaves((leaf: any) => {
+            this.app.workspace.iterateAllLeaves((leaf: WorkspaceLeaf) => {
                 if (leaf.view) {
-                    if (typeof (leaf.view as any).previewMode?.rerender === 'function') {
-                        (leaf.view as any).previewMode.rerender(true)
+                    // previewMode/editor.cm are undocumented internals not present on the public View type
+                    const view = leaf.view as any
+                    if (typeof view.previewMode?.rerender === 'function') {
+                        view.previewMode.rerender(true)
                     }
-                    const editor = (leaf.view as any).editor
+                    const editor = view.editor
                     if (editor && editor.cm && typeof editor.cm.dispatch === 'function') {
                         editor.cm.dispatch({
                             effects: [refreshInlineIssuesEffect.of()]
@@ -332,7 +335,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
     displayHeader() {
         const { containerEl } = this
-        containerEl.createEl('h2', { text: 'Jira Issue' })
+        new Setting(containerEl).setName('Jira Issue').setHeading()
         const description = containerEl.createEl('p')
         description.appendText('Need help? Explore the ')
         description.appendChild(createEl('a', {
@@ -345,7 +348,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
     displayFooter() {
         const { containerEl } = this
-        containerEl.createEl('h3', { text: 'Support development' })
+        new Setting(containerEl).setName('Support development').setHeading()
         const description = containerEl.createEl('p')
         description.appendText('If you enjoy Jira Issue, consider giving feedback on the ')
         description.appendChild(createEl('a', {
@@ -369,7 +372,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
     displayAccountsSettings() {
         const { containerEl } = this
-        containerEl.createEl('h3', { text: 'Accounts' })
+        new Setting(containerEl).setName('Accounts').setHeading()
 
         for (const account of SettingsData.accounts) {
             const accountSetting = new Setting(containerEl)
@@ -413,7 +416,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         if (!newAccount) newAccount = Object.assign({}, prevAccount)
         const { containerEl } = this
         containerEl.empty()
-        containerEl.createEl('h3', { text: 'Modify account' })
+        new Setting(containerEl).setName('Modify account').setHeading()
 
         new Setting(containerEl)
             .setName('Alias')
@@ -634,7 +637,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
     displayRenderingSettings() {
         const { containerEl } = this
-        containerEl.createEl('h3', { text: 'Rendering' })
+        new Setting(containerEl).setName('Rendering').setHeading()
 
         new Setting(containerEl)
             .setName('Default search results limit')
@@ -740,9 +743,9 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
     displaySearchColumnsSettings(isSearchColumnsDetailsOpen: boolean) {
         const { containerEl } = this
-        containerEl.createEl('h3', { text: 'Search columns' })
+        new Setting(containerEl).setName('Search columns').setHeading()
 
-        const desc = document.createDocumentFragment()
+        const desc = createFragment()
         desc.append(
             "Columns to display in the jira-search table visualization.",
         )
@@ -842,7 +845,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
     displayExtraSettings() {
         const { containerEl } = this
 
-        containerEl.createEl('h3', { text: 'Security' })
+        new Setting(containerEl).setName('Security').setHeading()
         const secretStorageAvailable = isSecretStorageAvailable(this.app)
         new Setting(containerEl)
             .setName('Credential storage method')
@@ -873,7 +876,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     }
                 }))
 
-        containerEl.createEl('h3', { text: 'Cache' })
+        new Setting(containerEl).setName('Cache').setHeading()
 
         new Setting(containerEl)
             .setName('Cache time')
@@ -886,7 +889,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     await this.saveSettings()
                 }))
 
-        containerEl.createEl('h3', { text: 'Troubleshooting' })
+        new Setting(containerEl).setName('Troubleshooting').setHeading()
         new Setting(containerEl)
             .setName('Log data request and responses')
             .setDesc('Log in the console (CTRL+Shift+I) all the API requests and responses performed by the plugin.')

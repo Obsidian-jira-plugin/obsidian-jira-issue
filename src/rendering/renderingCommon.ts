@@ -46,13 +46,13 @@ export default {
     issueUrl(account: IJiraIssueAccountSettings, issueKey: string): string {
         try {
             return (new URL(`${resolveWebBaseUrl(account)}/browse/${issueKey}`)).toString()
-        } catch (e) { return '' }
+        } catch { return '' }
     },
 
     searchUrl(account: IJiraIssueAccountSettings, searchQuery: string): string {
         try {
             return (new URL(`${resolveWebBaseUrl(account)}/issues/?jql=${searchQuery}`)).toString()
-        } catch (e) { return '' }
+        } catch { return '' }
     },
 
     getTheme(): string {

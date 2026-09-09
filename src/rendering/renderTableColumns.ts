@@ -364,7 +364,7 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
             try {
                 const epicIssue = await getIssue(epicVal, { fields: ['*all'], account: issue.account })
                 return { key: epicVal, summary: epicIssue?.fields?.summary || epicVal }
-            } catch (e) {
+            } catch {
                 return { key: epicVal }
             }
         }
@@ -400,7 +400,7 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
                         return parentEpic
                     }
                 }
-            } catch (e) {
+            } catch {
                 // Ignore fetch error
             }
             // Fallback for Sub-task: return parent Story/Task if no Epic was found
@@ -422,7 +422,7 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
                 if (fetchedEpic && fetchedEpic.fields) {
                     return { key: epicKey, summary: fetchedEpic.fields.summary || epicKey }
                 }
-            } catch (e) {
+            } catch {
                 return { key: epicKey }
             }
         }

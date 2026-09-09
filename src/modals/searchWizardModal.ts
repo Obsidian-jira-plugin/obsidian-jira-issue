@@ -43,7 +43,7 @@ export class SearchWizardModal extends Modal {
                     this._searchView.limit = value ? (parseInt(value) || null) : null
                 }))
 
-        const desc = document.createDocumentFragment()
+        const desc = createFragment()
         desc.createEl('h2', { text: 'Columns' })
         desc.appendText('Keep the list empty to use the default columns')
         new Setting(contentEl).setDesc(desc)

@@ -20,30 +20,30 @@ function cacheWrapper<TFunc extends (...args: any[]) => any>(func: TFunc)
     }
 }
 
-export async function getIssue(issueKey: string, options: { fields?: string[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraIssue> {
+export async function getIssue(this: void, issueKey: string, options: { fields?: string[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraIssue> {
     return cacheWrapper(JiraClient.getIssue)(issueKey, options)
 }
 
-export async function getSearchResults(query: string, options: { limit?: number, offset?: number, fields?: string[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSearchResults> {
+export async function getSearchResults(this: void, query: string, options: { limit?: number, offset?: number, fields?: string[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSearchResults> {
     return cacheWrapper(JiraClient.getSearchResults)(query, options)
 }
 
-export async function getDevStatus(issueId: string, options: { account?: IJiraIssueAccountSettings } = {}): Promise<IJiraDevStatus> {
+export async function getDevStatus(this: void, issueId: string, options: { account?: IJiraIssueAccountSettings } = {}): Promise<IJiraDevStatus> {
     return cacheWrapper(JiraClient.getDevStatus)(issueId, options)
 }
 
-export async function getBoards(projectKeyOrId: string, options: { limit?: number, offset?: number, account?: IJiraIssueAccountSettings } = {}): Promise<IJiraBoard[]> {
+export async function getBoards(this: void, projectKeyOrId: string, options: { limit?: number, offset?: number, account?: IJiraIssueAccountSettings } = {}): Promise<IJiraBoard[]> {
     return cacheWrapper(JiraClient.getBoards)(projectKeyOrId, options)
 }
 
-export async function getSprint(sprintId: number, options: { account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSprint> {
+export async function getSprint(this: void, sprintId: number, options: { account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSprint> {
     return cacheWrapper(JiraClient.getSprint)(sprintId, options)
 }
 
-export async function getSprints(boardId: number, options: { limit?: number, offset?: number, state?: ESprintState[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSprint[]> {
+export async function getSprints(this: void, boardId: number, options: { limit?: number, offset?: number, state?: ESprintState[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSprint[]> {
     return cacheWrapper(JiraClient.getSprints)(boardId, options)
 }
 
-export async function getLoggedUser(account: IJiraIssueAccountSettings = null): Promise<IJiraUser> {
+export async function getLoggedUser(this: void, account: IJiraIssueAccountSettings = null): Promise<IJiraUser> {
     return cacheWrapper(JiraClient.getLoggedUser)(account)
 }
