@@ -223,6 +223,20 @@ describe('JiraClient', () => {
             await expect(JiraClient.testConnection(TestAccountOpen))
                 .rejects.toEqual(new Error('Jira API 500 Error: Login required'))
         })
+
+        test('testConnection handles a response.json getter that throws on a non-JSON body', async () => {
+            // Obsidian's real requestUrl().json is a lazy getter that parses the body on
+            // first access and throws (e.g. SyntaxError) for a non-JSON response, regardless
+            // of what content-type says. Reproduce that exact behavior instead of a plain property.
+            const throwingResponse: any = { status: 200, headers: { 'Content-Type': 'TEXT/HTML' }, text: '<title>Log in</title>' }
+            Object.defineProperty(throwingResponse, 'json', {
+                get() { throw new SyntaxError('Unexpected token < in JSON') },
+            })
+            requestUrlMock.mockReturnValue(throwingResponse)
+
+            await expect(JiraClient.testConnection(TestAccountOpen))
+                .rejects.toEqual(new Error('Jira API 200 Error: Login required'))
+        })
     })
 
     test.todo('getIssue')
