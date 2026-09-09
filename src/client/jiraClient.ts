@@ -101,8 +101,14 @@ function hasJsonBody(response: RequestUrlResponse): boolean {
     if (!response) {
         return false
     }
-    if (response.json !== undefined && response.json !== null) {
-        return true
+    try {
+        // response.json is a lazy getter that parses the body on first access and throws
+        // (e.g. SyntaxError) if it isn't valid JSON, regardless of what content-type says.
+        if (response.json !== undefined && response.json !== null) {
+            return true
+        }
+    } catch {
+        // Fall through to parsing response.text instead.
     }
     if (typeof response.text === 'string' && response.text.trim()) {
         try {
