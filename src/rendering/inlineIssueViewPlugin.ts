@@ -1,4 +1,4 @@
-import { RangeSet, StateEffect, StateField } from "@codemirror/state"
+import { RangeSet, StateEffect } from "@codemirror/state"
 import { Decoration, DecorationSet, EditorView, MatchDecorator, PluginSpec, PluginValue, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view"
 import { editorLivePreviewField } from "obsidian"
 import JiraClient from "../client/jiraClient"
@@ -23,7 +23,7 @@ function escapeRegexp(str: string): string {
     return str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/\//g, '\\/')
 }
 
-const isEditorInLivePreviewMode = (view: EditorView) => view.state.field(editorLivePreviewField as unknown as StateField<boolean>)
+const isEditorInLivePreviewMode = (view: EditorView) => view.state.field(editorLivePreviewField)
 const isCursorInsideTag = (view: EditorView, start: number, length: number) => {
     const cursor = view.state.selection.main.head
     return (cursor > start - 1 && cursor < start + length + 1)
@@ -137,7 +137,7 @@ function buildViewPluginClass(matchDecorator: IMatchDecoratorRef) {
         }
 
         update(update: ViewUpdate): void {
-            const editorModeChanged = update.startState.field(editorLivePreviewField as unknown as StateField<boolean>) !== update.state.field(editorLivePreviewField as unknown as StateField<boolean>)
+            const editorModeChanged = update.startState.field(editorLivePreviewField) !== update.state.field(editorLivePreviewField)
             const hasRefreshEffect = update.transactions.some(tr => tr.effects.some(e => e.is(refreshInlineIssuesEffect)))
             if (update.docChanged || update.startState.selection.main !== update.state.selection.main || editorModeChanged || hasRefreshEffect) {
                 this.decorators = matchDecorator.ref ? matchDecorator.ref.createDeco(update.view) : RangeSet.empty

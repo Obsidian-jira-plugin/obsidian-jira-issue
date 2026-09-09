@@ -62,7 +62,7 @@ export async function getWorklogPerDay(projectKeyOrId: string, startDate: string
             return {
                 title: u[0],
                 data: Object.values(u[1])
-            } as IChartSeries
+            }
         }))
 }
 

@@ -45,7 +45,7 @@ export default {
         }
     },
 
-    clear(): void {
+    clear(this: void): void {
         cache = {}
     },
 }

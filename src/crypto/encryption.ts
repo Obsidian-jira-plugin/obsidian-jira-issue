@@ -87,7 +87,7 @@ export async function decryptSecret(passphrase: string, encryptedData: string): 
         )
         const decoder = new TextDecoder()
         return decoder.decode(decrypted)
-    } catch (e) {
+    } catch {
         throw new Error('Decryption failed. Invalid passphrase or corrupted data.')
     }
 }
