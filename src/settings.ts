@@ -89,6 +89,17 @@ function normalizePositiveNumber(value: number, defaultValue: number): number {
     return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue
 }
 
+// Strips plaintext password/bareToken from the given accounts (in place) and reports whether
+// any were actually present, so callers can warn the user that pending credentials weren't saved.
+function stripPlaintextSecrets(accounts: IJiraIssueAccountSettings[]): boolean {
+    const hadPendingSecrets = accounts.some(account => account.password || account.bareToken)
+    for (const account of accounts) {
+        delete account.password
+        delete account.bareToken
+    }
+    return hadPendingSecrets
+}
+
 export class JiraIssueSettingTab extends PluginSettingTab {
     private _plugin: JiraIssuePlugin
     private _onChangeListener: ((options?: { isVisualOnly?: boolean }) => void) | null = null
@@ -213,16 +224,24 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         settingsToStore.accounts = deepCopy(SettingsData.accounts)
         settingsToStore.accounts.forEach(account => account.cache = DEFAULT_ACCOUNT.cache)
 
-        if (SettingsData.credentialStorageType === ECredentialStorageType.KEYCHAIN && isSecretStorageAvailable(this.app)) {
-            for (const account of SettingsData.accounts) {
-                await saveAccountSecrets(this.app, account)
-            }
-            // Strip raw secrets from data.json
-            for (const account of settingsToStore.accounts) {
-                delete account.password
-                delete account.bareToken
-                delete account.encryptedPassword
-                delete account.encryptedBareToken
+        if (SettingsData.credentialStorageType === ECredentialStorageType.KEYCHAIN) {
+            if (isSecretStorageAvailable(this.app)) {
+                for (const account of SettingsData.accounts) {
+                    await saveAccountSecrets(this.app, account)
+                }
+                stripPlaintextSecrets(settingsToStore.accounts)
+                for (const account of settingsToStore.accounts) {
+                    delete account.encryptedPassword
+                    delete account.encryptedBareToken
+                }
+            } else {
+                // Secret storage unavailable on this platform/version (e.g. a vault synced from
+                // a desktop session where it was available): never persist plaintext secrets to
+                // disk. They remain live in SettingsData.accounts for the rest of this session.
+                const hadPendingSecrets = stripPlaintextSecrets(settingsToStore.accounts)
+                if (hadPendingSecrets) {
+                    new Notice('Jira Issue: OS Keychain is unavailable on this platform. Credentials were not saved to disk; they will work for this session but were not persisted.')
+                }
             }
         } else if (SettingsData.credentialStorageType === ECredentialStorageType.PASSPHRASE) {
             if (isSecretStorageAvailable(this.app)) {
@@ -245,11 +264,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 // No unlocked Master Passphrase session: never persist plaintext secrets to disk.
                 // Strip them from the copy being saved (they remain live in SettingsData.accounts
                 // in memory for the rest of this session) and tell the user why.
-                const hadPendingSecrets = settingsToStore.accounts.some(account => account.password || account.bareToken)
-                for (const account of settingsToStore.accounts) {
-                    delete account.password
-                    delete account.bareToken
-                }
+                const hadPendingSecrets = stripPlaintextSecrets(settingsToStore.accounts)
                 if (hadPendingSecrets) {
                     new Notice('Jira Issue: Unlock your Master Passphrase to save new or changed credentials to disk. They will work for this session but were not persisted.')
                 }

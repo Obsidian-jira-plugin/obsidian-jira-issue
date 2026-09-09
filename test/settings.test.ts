@@ -169,6 +169,38 @@ describe('Settings', () => {
         expect(SettingsData.accounts[0].password).toEqual('secretPassword123')
         expect(SettingsData.accounts[0].bareToken).toEqual('secretToken456')
     })
+    test('saveSettings never persists plaintext credentials in KEYCHAIN mode when secret storage is unavailable', async () => {
+        const mockApp = {
+            workspace: {
+                iterateAllLeaves: jest.fn(),
+            },
+        } as unknown as any
+
+        const customPluginMock = {
+            loadData: jest.fn(),
+            saveData: jest.fn(),
+        }
+        const customSettingTab = new JiraIssueSettingTab(mockApp, customPluginMock as any)
+
+        SettingsData.credentialStorageType = ECredentialStorageType.KEYCHAIN
+        SettingsData.accounts = [{
+            ...DEFAULT_ACCOUNT,
+            id: 'test-acc-3',
+            alias: 'SyncedAccount',
+            password: 'plaintextPassword',
+            bareToken: 'plaintextToken',
+        }]
+
+        await customSettingTab.saveSettings()
+
+        expect(customPluginMock.saveData).toHaveBeenCalledTimes(1)
+        const savedData = customPluginMock.saveData.mock.calls[0][0]
+        expect(savedData.accounts[0].password).toBeUndefined()
+        expect(savedData.accounts[0].bareToken).toBeUndefined()
+        // The plaintext values stay usable in memory for the rest of this session.
+        expect(SettingsData.accounts[0].password).toEqual('plaintextPassword')
+        expect(SettingsData.accounts[0].bareToken).toEqual('plaintextToken')
+    })
     test('saveSettings never persists plaintext credentials in PASSPHRASE mode without an unlocked session', async () => {
         const mockApp = {
             workspace: {
