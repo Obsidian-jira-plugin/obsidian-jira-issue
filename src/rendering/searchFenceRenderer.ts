@@ -108,7 +108,7 @@ function renderSearchFooter(rootEl: HTMLElement, searchView: SearchView, searchR
     refreshButton.onClickEvent(() => {
         rootEl.empty()
         ObjectsCache.delete(searchView.getCacheKey())
-        SearchFenceRenderer(searchView.toRawString(), rootEl, null)
+        void SearchFenceRenderer(searchView.toRawString(), rootEl, null)
     })
     return searchFooter
 }
@@ -132,7 +132,7 @@ export const SearchFenceRenderer = async (source: string, rootEl: HTMLElement, c
                 .then(newSearchResults => {
                     searchView.account = newSearchResults.account
                     const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
-                    renderSearchResults(rootEl, searchView, searchResults)
+                    return renderSearchResults(rootEl, searchView, searchResults)
                 }).catch(err => {
                     ObjectsCache.add(searchView.getCacheKey(), err, true)
                     RC.renderSearchError(rootEl, err, searchView)

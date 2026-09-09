@@ -1,6 +1,6 @@
+import colorsys from "colorsys"
 import { IJiraIssueAccountSettings } from "./interfaces/settingsInterfaces"
 import { SettingsData } from "./settings"
-const colorsys = require('colorsys')
 
 export function getAccountByAlias(alias: string): IJiraIssueAccountSettings {
     if (alias) {

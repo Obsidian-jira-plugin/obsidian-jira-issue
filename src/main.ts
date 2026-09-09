@@ -30,7 +30,7 @@ export default class JiraIssuePlugin extends Plugin {
         await this._settingTab.loadSettings()
         applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
         this.addSettingTab(this._settingTab)
-        JiraClient.updateCustomFieldsCache()
+        void JiraClient.updateCustomFieldsCache()
         // Load icons
         setupIcons()
         // Fence rendering
@@ -57,7 +57,7 @@ export default class JiraIssuePlugin extends Plugin {
         this._settingTab.onChange((options?: { isVisualOnly?: boolean }) => {
             if (!options?.isVisualOnly) {
                 ObjectsCache.clear()
-                JiraClient.updateCustomFieldsCache()
+                void JiraClient.updateCustomFieldsCache()
             }
             this._inlineIssueViewPlugin.update()
             applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
@@ -79,7 +79,7 @@ export default class JiraIssuePlugin extends Plugin {
             name: 'Clear cache',
             callback: () => {
                 ObjectsCache.clear()
-                JiraClient.updateCustomFieldsCache()
+                void JiraClient.updateCustomFieldsCache()
                 new Notice('JiraIssue: Cache cleaned')
             }
         })

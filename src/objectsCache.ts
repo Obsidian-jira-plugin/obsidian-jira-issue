@@ -1,7 +1,6 @@
+import moment from "moment"
+import ms from "ms"
 import { SettingsData } from "./settings"
-
-const ms = require('ms')
-const moment = require('moment')
 
 interface CacheItem {
     updateTime: number,

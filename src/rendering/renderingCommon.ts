@@ -57,7 +57,7 @@ export default {
 
     getTheme(): string {
         switch (SettingsData.colorSchema) {
-            case EColorSchema.FOLLOW_OBSIDIAN:
+            case EColorSchema.FOLLOW_OBSIDIAN: {
                 const obsidianTheme = (ObsidianApp.vault as any).getConfig("theme")
                 if (obsidianTheme === 'obsidian') {
                     return 'is-dark'
@@ -71,6 +71,7 @@ export default {
                     }
                 }
                 break
+            }
             case EColorSchema.LIGHT:
                 return 'is-light'
             case EColorSchema.DARK:

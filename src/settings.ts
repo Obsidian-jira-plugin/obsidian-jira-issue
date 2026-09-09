@@ -113,7 +113,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 ? ECredentialStorageType.KEYCHAIN
                 : ECredentialStorageType.PLAINTEXT
         }
-        for (const i in SettingsData.accounts) {
+        for (let i = 0; i < SettingsData.accounts.length; i++) {
             SettingsData.accounts[i] = Object.assign({}, DEFAULT_ACCOUNT, SettingsData.accounts[i])
             if (!SettingsData.accounts[i].id) {
                 SettingsData.accounts[i].id = generateAccountId()
