@@ -18,10 +18,14 @@ const runningAnimations = new WeakMap<HTMLElement, Animation>()
 const resizeObservers = new Map<HTMLElement, ResizeObserver>()
 const scheduledElementRefreshes = new Map<HTMLElement, { ownerWindow: Window, frameId: number }>()
 const scheduledRootRefreshes = new Map<Window, number>()
-const cleanupIntervals = new Map<Window, number>()
 // Detached elements are only actively swept on a settings change or reduced-motion toggle;
 // this periodic sweep bounds how long a closed note's ResizeObservers/Map entries can linger.
+// stopTrackingDisconnectedElements() already scans every tracked element regardless of which
+// window it belongs to, so a single interval is enough - it's anchored to the plugin's own
+// persistent main window (not whichever window's element happened to trigger registration
+// first), so the sweep keeps running even if that popout window is later closed.
 const DISCONNECTED_ELEMENTS_SWEEP_MS = 30000
+let cleanupIntervalId: number | null = null
 
 export function calculateOverflowAnimation(textWidth: number, viewportWidth: number): OverflowAnimationMetrics | null {
     const distancePx = Math.max(0, Math.ceil(textWidth - viewportWidth))
@@ -119,7 +123,7 @@ function observeOverflowElement(element: HTMLElement): void {
     })
     resizeObservers.set(element, resizeObserver)
     resizeObserver.observe(viewport)
-    ensureCleanupInterval(ownerWindow)
+    ensureCleanupInterval()
 }
 
 function stopTrackingDisconnectedElements(): void {
@@ -130,14 +134,13 @@ function stopTrackingDisconnectedElements(): void {
     })
 }
 
-function ensureCleanupInterval(ownerWindow: Window): void {
-    if (cleanupIntervals.has(ownerWindow)) {
+function ensureCleanupInterval(): void {
+    if (cleanupIntervalId !== null) {
         return
     }
-    const intervalId = ownerWindow.setInterval(() => {
+    cleanupIntervalId = window.setInterval(() => {
         stopTrackingDisconnectedElements()
     }, DISCONNECTED_ELEMENTS_SWEEP_MS)
-    cleanupIntervals.set(ownerWindow, intervalId)
 }
 
 export function refreshOverflowElement(element: HTMLElement): void {
@@ -225,8 +228,10 @@ export function applyOverflowWidths(root: ParentNode, summaryWidthRem: number, s
 export function stopAllOverflowElements(root: ParentNode = document): void {
     scheduledRootRefreshes.forEach((frameId, ownerWindow) => ownerWindow.cancelAnimationFrame(frameId))
     scheduledRootRefreshes.clear()
-    cleanupIntervals.forEach((intervalId, ownerWindow) => ownerWindow.clearInterval(intervalId))
-    cleanupIntervals.clear()
+    if (cleanupIntervalId !== null) {
+        window.clearInterval(cleanupIntervalId)
+        cleanupIntervalId = null
+    }
     Array.from(scheduledElementRefreshes.keys()).forEach(stopOverflowElementTracking)
     Array.from(resizeObservers.keys()).forEach(stopOverflowElementTracking)
     root.querySelectorAll<HTMLElement>(OVERFLOW_TAG_SELECTOR).forEach(stopOverflowAnimation)

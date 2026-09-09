@@ -6,6 +6,13 @@ import {
 } from '../src/rendering/overflowText'
 
 describe('OverflowText', () => {
+    afterEach(() => {
+        // The cleanup interval is module-level singleton state (one interval for the whole
+        // plugin, not per window) - reset it between tests regardless of what each test did.
+        stopAllOverflowElements({ querySelectorAll: (): HTMLElement[] => [] } as unknown as ParentNode)
+        delete (global as any).window
+    })
+
     test('does not animate text that fits in the viewport', () => {
         expect(calculateOverflowAnimation(200, 200)).toBeNull()
         expect(calculateOverflowAnimation(150, 200)).toBeNull()
@@ -71,6 +78,7 @@ describe('OverflowText', () => {
             setInterval: jest.fn(() => 1),
             clearInterval: jest.fn(),
         }
+        ;(global as any).window = ownerWindow
         const viewport = { clientWidth: 150 }
         const text = { scrollWidth: 120 }
         const classList = { add: jest.fn(), remove: jest.fn() }
@@ -120,6 +128,7 @@ describe('OverflowText', () => {
             }),
             clearInterval: jest.fn(),
         }
+        ;(global as any).window = ownerWindow
         const viewport = { clientWidth: 150 }
         const text = { scrollWidth: 120 }
         const element = {
@@ -138,6 +147,55 @@ describe('OverflowText', () => {
         sweepCallback()
 
         expect(disconnect).toHaveBeenCalledTimes(1)
+    })
+
+    test('uses a single global sweep interval even for elements from a different (e.g. popout) window', () => {
+        const mainWindow = {
+            ResizeObserver: class {
+                constructor() { /* not exercised */ }
+                observe = jest.fn()
+                disconnect = jest.fn()
+            },
+            requestAnimationFrame: jest.fn(() => 1),
+            cancelAnimationFrame: jest.fn(),
+            matchMedia: jest.fn(() => ({ matches: false })),
+            setInterval: jest.fn(() => 1),
+            clearInterval: jest.fn(),
+        }
+        ;(global as any).window = mainWindow
+
+        // A popout window: its own distinct Window-like object, with no setInterval of its own
+        // ever invoked - closing it later must not stop the sweep, because the sweep only ever
+        // runs on the plugin's persistent main window, never on whichever window registered
+        // an element first.
+        const popoutWindow = {
+            ResizeObserver: class {
+                constructor() { /* not exercised */ }
+                observe = jest.fn()
+                disconnect = jest.fn()
+            },
+            requestAnimationFrame: jest.fn(() => 1),
+            cancelAnimationFrame: jest.fn(),
+        }
+
+        const elementInMainWindow = {
+            classList: { add: jest.fn(), remove: jest.fn() },
+            isConnected: true,
+            ownerDocument: { defaultView: mainWindow },
+            querySelector: jest.fn(() => ({ clientWidth: 150 })),
+        } as unknown as HTMLElement
+        const elementInPopout = {
+            classList: { add: jest.fn(), remove: jest.fn() },
+            isConnected: true,
+            ownerDocument: { defaultView: popoutWindow },
+            querySelector: jest.fn(() => ({ clientWidth: 150 })),
+        } as unknown as HTMLElement
+
+        scheduleOverflowElementRefresh(elementInMainWindow)
+        scheduleOverflowElementRefresh(elementInPopout)
+
+        // Only the main window's setInterval was ever called, exactly once - not once per window.
+        expect(mainWindow.setInterval).toHaveBeenCalledTimes(1)
     })
 })
 
