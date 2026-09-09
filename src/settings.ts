@@ -241,6 +241,18 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                         delete account.bareToken
                     }
                 }
+            } else {
+                // No unlocked Master Passphrase session: never persist plaintext secrets to disk.
+                // Strip them from the copy being saved (they remain live in SettingsData.accounts
+                // in memory for the rest of this session) and tell the user why.
+                const hadPendingSecrets = settingsToStore.accounts.some(account => account.password || account.bareToken)
+                for (const account of settingsToStore.accounts) {
+                    delete account.password
+                    delete account.bareToken
+                }
+                if (hadPendingSecrets) {
+                    new Notice('Jira Issue: Unlock your Master Passphrase to save new or changed credentials to disk. They will work for this session but were not persisted.')
+                }
             }
         } else if (SettingsData.credentialStorageType === ECredentialStorageType.PLAINTEXT) {
             if (isSecretStorageAvailable(this.app)) {

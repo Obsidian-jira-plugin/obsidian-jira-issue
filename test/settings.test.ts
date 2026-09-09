@@ -2,7 +2,7 @@ jest.mock('obsidian')
 jest.mock('../src/client/jiraClient')
 
 import { EAuthenticationTypes, EColorSchema, ECredentialStorageType, IJiraIssueSettings } from "../src/interfaces/settingsInterfaces"
-import { DEFAULT_ACCOUNT, DEFAULT_SETTINGS, JiraIssueSettingTab, SettingsData } from "../src/settings"
+import { DEFAULT_ACCOUNT, DEFAULT_SETTINGS, JiraIssueSettingTab, SettingsData, setMasterPassphraseSession } from "../src/settings"
 
 function deepCopy(obj: any): any {
     return JSON.parse(JSON.stringify(obj))
@@ -168,6 +168,41 @@ describe('Settings', () => {
         expect(savedData.accounts[0].alias).toEqual('TestAccount')
         expect(SettingsData.accounts[0].password).toEqual('secretPassword123')
         expect(SettingsData.accounts[0].bareToken).toEqual('secretToken456')
+    })
+    test('saveSettings never persists plaintext credentials in PASSPHRASE mode without an unlocked session', async () => {
+        const mockApp = {
+            workspace: {
+                iterateAllLeaves: jest.fn(),
+            },
+        } as unknown as any
+
+        const customPluginMock = {
+            loadData: jest.fn(),
+            saveData: jest.fn(),
+        }
+        const customSettingTab = new JiraIssueSettingTab(mockApp, customPluginMock as any)
+
+        setMasterPassphraseSession(null)
+        SettingsData.credentialStorageType = ECredentialStorageType.PASSPHRASE
+        SettingsData.accounts = [{
+            ...DEFAULT_ACCOUNT,
+            id: 'test-acc-2',
+            alias: 'LockedAccount',
+            password: 'newlyTypedPassword',
+            bareToken: 'newlyTypedToken',
+        }]
+
+        await customSettingTab.saveSettings()
+
+        expect(customPluginMock.saveData).toHaveBeenCalledTimes(1)
+        const savedData = customPluginMock.saveData.mock.calls[0][0]
+        expect(savedData.accounts[0].password).toBeUndefined()
+        expect(savedData.accounts[0].bareToken).toBeUndefined()
+        expect(savedData.accounts[0].encryptedPassword).toBeUndefined()
+        expect(savedData.accounts[0].encryptedBareToken).toBeUndefined()
+        // The plaintext values stay usable in memory for the rest of this session.
+        expect(SettingsData.accounts[0].password).toEqual('newlyTypedPassword')
+        expect(SettingsData.accounts[0].bareToken).toEqual('newlyTypedToken')
     })
     test.todo('loadSettings legacy account migration')
     test.todo('createNewEmptyAccount')
