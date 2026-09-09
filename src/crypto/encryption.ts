@@ -1,4 +1,6 @@
 function getCrypto(): Crypto {
+    // globalThis.crypto covers both the Obsidian/Electron runtime and the Node test environment,
+    // where there is no `window` global at all (jest.config.js uses testEnvironment: 'node').
     if (typeof globalThis !== 'undefined' && globalThis.crypto) {
         return globalThis.crypto
     }

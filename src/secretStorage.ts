@@ -63,6 +63,6 @@ export async function deleteAccountSecrets(app: App, account: IJiraIssueAccountS
 function setAndVerifySecret(secretStorage: ISecretStorage, key: string, value: string): void {
     secretStorage.setSecret(key, value)
     if (secretStorage.getSecret(key) !== value) {
-        throw new Error(`Failed to persist secret \"${key}\" in Obsidian SecretStorage`)
+        throw new Error(`Failed to persist secret "${key}" in Obsidian SecretStorage`)
     }
 }

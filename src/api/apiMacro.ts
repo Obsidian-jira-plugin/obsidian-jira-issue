@@ -1,7 +1,7 @@
 import { ESprintState, IJiraSprint, IJiraWorklog, ISeries } from "../interfaces/issueInterfaces"
 import API from "./api"
 import moment from "moment"
-const ms = require('ms')
+import ms from "ms"
 
 function dateTimeToDate(dateTime: string): string {
     if (dateTime.match(/^\d/)) {
