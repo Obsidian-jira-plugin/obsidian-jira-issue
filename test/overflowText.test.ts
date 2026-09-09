@@ -68,6 +68,8 @@ describe('OverflowText', () => {
             }),
             cancelAnimationFrame: jest.fn(),
             matchMedia: jest.fn(() => ({ matches: false })),
+            setInterval: jest.fn(() => 1),
+            clearInterval: jest.fn(),
         }
         const viewport = { clientWidth: 150 }
         const text = { scrollWidth: 120 }
@@ -81,6 +83,7 @@ describe('OverflowText', () => {
 
         scheduleOverflowElementRefresh(element)
         expect(observe).toHaveBeenCalledWith(viewport)
+        expect(ownerWindow.setInterval).toHaveBeenCalledTimes(1)
         animationFrames.shift()(0)
         expect(classList.add).not.toHaveBeenCalled()
 
@@ -95,6 +98,46 @@ describe('OverflowText', () => {
         } as unknown as ParentNode
         stopAllOverflowElements(root)
         expect(disconnect).toHaveBeenCalled()
+        expect(ownerWindow.clearInterval).toHaveBeenCalledTimes(1)
+    })
+
+    test('periodically sweeps and stops tracking elements removed from the DOM', () => {
+        let sweepCallback: () => void
+        const observe = jest.fn()
+        const disconnect = jest.fn()
+        const ownerWindow = {
+            ResizeObserver: class {
+                constructor() { /* callback not exercised in this test */ }
+                observe = observe
+                disconnect = disconnect
+            },
+            requestAnimationFrame: jest.fn(() => 1),
+            cancelAnimationFrame: jest.fn(),
+            matchMedia: jest.fn(() => ({ matches: false })),
+            setInterval: jest.fn((callback: () => void) => {
+                sweepCallback = callback
+                return 1
+            }),
+            clearInterval: jest.fn(),
+        }
+        const viewport = { clientWidth: 150 }
+        const text = { scrollWidth: 120 }
+        const element = {
+            classList: { add: jest.fn(), remove: jest.fn() },
+            isConnected: true,
+            ownerDocument: { defaultView: ownerWindow },
+            querySelector: jest.fn((selector: string) => selector === '.ji-overflow-viewport' ? viewport : text),
+        } as unknown as HTMLElement
+
+        scheduleOverflowElementRefresh(element)
+        expect(observe).toHaveBeenCalledTimes(1)
+
+        // Note closed / navigated away from: the element is detached, but nothing
+        // triggers a resize event on it anymore, so only the periodic sweep can catch it.
+        ;(element as any).isConnected = false
+        sweepCallback()
+
+        expect(disconnect).toHaveBeenCalledTimes(1)
     })
 })
 
