@@ -12,16 +12,45 @@ function getRenderStyleClass(): string {
     return SettingsData.renderStyle === ERenderStyle.CLASSIC ? 'ji-style-classic' : 'ji-style-modern'
 }
 
+function replaceInlineIssuesInTextNode(textNode: Text, pattern: RegExp): void {
+    const text = textNode.textContent
+    pattern.lastIndex = 0
+    if (!pattern.test(text)) return
+
+    const doc = textNode.ownerDocument
+    const fragment = doc.createDocumentFragment()
+    let lastIndex = 0
+    let match: RegExpExecArray
+    pattern.lastIndex = 0
+    while ((match = pattern.exec(text))) {
+        if (match.index > lastIndex) {
+            fragment.appendChild(doc.createTextNode(text.substring(lastIndex, match.index)))
+        }
+        const compact = !!match[1]
+        const issueKey = match[2]
+        const container = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}`, attr: { 'data-issue-key': issueKey, 'data-compact': compact } })
+        container.appendChild(RC.renderLoadingItem(issueKey, true))
+        fragment.appendChild(container)
+        lastIndex = match.index + match[0].length
+    }
+    if (lastIndex < text.length) {
+        fragment.appendChild(doc.createTextNode(text.substring(lastIndex)))
+    }
+    textNode.parentNode.replaceChild(fragment, textNode)
+}
+
 function convertInlineIssuesToTags(el: HTMLElement): void {
     if (SettingsData.inlineIssuePrefix) {
-        let match
-        while (match = new RegExp(`${SettingsData.inlineIssuePrefix}(${COMPACT_SYMBOL}?)(${JIRA_KEY_REGEX})`).exec(el.innerHTML)) {
-            // console.log({ match })
-            const compact = !!match[1]
-            const issueKey = match[2]
-            const container = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}`, attr: { 'data-issue-key': issueKey, 'data-compact': compact } })
-            container.appendChild(RC.renderLoadingItem(issueKey, true))
-            el.innerHTML = el.innerHTML.replace(match[0], container.outerHTML)
+        const pattern = new RegExp(`${SettingsData.inlineIssuePrefix}(${COMPACT_SYMBOL}?)(${JIRA_KEY_REGEX})`, 'g')
+        const doc = el.ownerDocument
+        const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+        const textNodes: Text[] = []
+        let node: Node
+        while ((node = walker.nextNode())) {
+            textNodes.push(node as Text)
+        }
+        for (const textNode of textNodes) {
+            replaceInlineIssuesInTextNode(textNode, pattern)
         }
     }
 }
