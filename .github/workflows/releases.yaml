@@ -12,6 +12,11 @@ on:
 env:
   PLUGIN_NAME: obsidian-jira-issue
 
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,17 +38,21 @@ jobs:
         run: |
           pnpm install --no-frozen-lockfile
           pnpm run build
-          mkdir ${{ env.PLUGIN_NAME }}
-          cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}
-          zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
           echo "tag_name=$(git tag --sort version:refname | tail -n 1)" >> $GITHUB_OUTPUT
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            ./main.js
+            ./manifest.json
+            ./styles.css
 
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            ./${{ env.PLUGIN_NAME }}.zip
             ./main.js
             ./manifest.json
             ./styles.css

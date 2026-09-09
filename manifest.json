@@ -3,9 +3,9 @@
   "name": "Jira Issue",
   "version": "2.0.0",
   "minAppVersion": "0.12.0",
-  "description": "This plugin allows you to track the progress of Atlassian Jira issues from your Obsidian notes.",
+  "description": "Track the progress of Atlassian Jira issues from your notes.",
   "author": "Obsidian Jira Plugin Community (originally by marc0l92)",
-  "authorUrl": "https://github.com/Obsidian-jira-plugin/obsidian-jira-issue",
+  "authorUrl": "https://github.com/Obsidian-jira-plugin",
   "fundingUrl": "https://ko-fi.com/marc0l92",
   "isDesktopOnly": false
 }

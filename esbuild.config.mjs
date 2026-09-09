@@ -1,12 +1,12 @@
 import esbuild from "esbuild"
 import process from "process"
-import builtins from 'builtin-modules'
+import { builtinModules as builtins } from "node:module"
 
 const prod = (process.argv[2] === 'production')
 
 esbuild.build({
   banner: {
-    js: '/* Project: https://github.com/marc0l92/obsidian-jira-issue */',
+    js: '/* Project: https://github.com/Obsidian-jira-plugin/obsidian-jira-issue */',
   },
   entryPoints: ['src/main.ts'],
   bundle: true,
