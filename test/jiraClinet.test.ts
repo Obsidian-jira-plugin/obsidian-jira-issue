@@ -189,7 +189,7 @@ describe('JiraClient', () => {
 
             await JiraClient.getBoards(projectKey, { limit: resultLimit, account: account2025 })
 
-            const calledUrl = requestUrlMock.mock.calls[0][0].url
+            const calledUrl = (requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam).url
             expect(calledUrl).toContain(`projectKeyOrId=${projectKey}`)
             expect(calledUrl).toContain(`maxResults=${resultLimit}`)
         })
@@ -201,7 +201,7 @@ describe('JiraClient', () => {
 
             await JiraClient.getBoards(projectKey, { limit: resultLimit, account: TestAccountOpen })
 
-            const calledUrl = requestUrlMock.mock.calls[0][0].url
+            const calledUrl = (requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam).url
             expect(calledUrl).toContain(`projectKeyOrId=${projectKey}`)
             expect(calledUrl).toContain(`maxResults=${resultLimit}`)
         })
