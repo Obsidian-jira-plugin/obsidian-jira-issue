@@ -180,6 +180,31 @@ describe('JiraClient', () => {
             expect(issue.fields.reporter.avatarUrls['16x16']).toBeUndefined()
             expect(issue.fields.assignee.avatarUrls['16x16']).toBeUndefined()
         })
+        test('getBoards includes query parameters when use2025Api is enabled', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: { values: [] } } as any)
+            
+            const projectKey = "PRO";
+            const resultLimit = 10;
+            const account2025 = { ...TestAccountOpen, use2025Api: true }
+
+            await JiraClient.getBoards(projectKey, { limit: resultLimit, account: account2025 })
+
+            const calledUrl = (requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam).url
+            expect(calledUrl).toContain(`projectKeyOrId=${projectKey}`)
+            expect(calledUrl).toContain(`maxResults=${resultLimit}`)
+        })
+        test('getBoards includes query parameters when use2025Api is disabled', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: { values: [] } } as any)
+
+            const projectKey = "PRO";
+            const resultLimit = 10;
+
+            await JiraClient.getBoards(projectKey, { limit: resultLimit, account: TestAccountOpen })
+
+            const calledUrl = (requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam).url
+            expect(calledUrl).toContain(`projectKeyOrId=${projectKey}`)
+            expect(calledUrl).toContain(`maxResults=${resultLimit}`)
+        })
     })
 
     describe('Negative tests', () => {

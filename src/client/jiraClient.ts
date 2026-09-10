@@ -67,7 +67,7 @@ function buildUrl(host: string, requestOptions: RequestOptions, use2025Api: bool
     const normalizedPath = path.startsWith('/') ? path : '/' + path
 
     const url = new URL(`${normalizedHost}${normalizedBasePath}${normalizedPath}`)
-    const queryParameters = use2025Api ? requestOptions.queryParameters2025 : requestOptions.queryParameters
+    const queryParameters = (use2025Api && requestOptions.queryParameters2025) ? requestOptions.queryParameters2025 : requestOptions.queryParameters
     if (queryParameters) {
         url.search = queryParameters.toString()
     }
