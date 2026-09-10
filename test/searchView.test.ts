@@ -30,6 +30,12 @@ describe('SearchView', () => {
                 const sv = SearchView.fromString(kQuery)
                 expect(sv.query).toEqual(kQuery)
             })
+            test('legacy query only with a colon in a modern Jira Cloud accountId', () => {
+                // https://github.com/Obsidian-jira-plugin/obsidian-jira-issue/issues/21
+                const kQueryWithAccountId = `project in (P1,P2) and sprint != 871 and assignee = 70121:a1118173-3f72-4aa0-be80-0976679a9d25`
+                const sv = SearchView.fromString(kQueryWithAccountId)
+                expect(sv.query).toEqual(kQueryWithAccountId)
+            })
             test('Full basic query', () => {
                 const sv = SearchView.fromString(`type: ${kType}
 ${kComment}

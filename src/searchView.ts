@@ -11,6 +11,7 @@ export class SearchView {
     account: IJiraIssueAccountSettings = null
     label: string = null
     private _cacheKey: string = null
+    private static readonly ADVANCED_MODE_KEYS = ['type', 'query', 'limit', 'columns', 'account', 'label']
 
     static fromString(str: string): SearchView {
         const sv = new SearchView()
@@ -18,8 +19,13 @@ export class SearchView {
         for (const line of lines) {
             const [key, ...values] = line.split(':')
             const value = values.join(':').trim()
+            // A colon alone doesn't mean advanced "key: value" syntax - a plain JQL query can
+            // legitimately contain one too, e.g. `assignee = 70121:a1118173-...` (modern Jira
+            // Cloud accountId format). Only treat it as advanced mode if the part before the
+            // first colon is actually one of the known keys.
+            const isAdvancedLine = SearchView.ADVANCED_MODE_KEYS.includes(key.trim().toLowerCase())
 
-            if (!value && lines.length === 1) {
+            if (!isAdvancedLine && lines.length === 1) {
                 // Basic mode with only the query
                 sv.query = line
             } else {
