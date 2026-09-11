@@ -30,6 +30,21 @@ describe('SearchView', () => {
                 const sv = SearchView.fromString(kQuery)
                 expect(sv.query).toEqual(kQuery)
             })
+            test('legacy query only with a colon in a modern Jira Cloud accountId', () => {
+                // https://github.com/Obsidian-jira-plugin/obsidian-jira-issue/issues/21
+                const kQueryWithAccountId = `project in (P1,P2) and sprint != 871 and assignee = 70121:a1118173-3f72-4aa0-be80-0976679a9d25`
+                const sv = SearchView.fromString(kQueryWithAccountId)
+                expect(sv.query).toEqual(kQueryWithAccountId)
+            })
+            test.each(['query', 'query:', 'label', 'label:', 'account', 'account:', 'columns', 'columns:'])(
+                'a single line that is just the bare reserved word "%s" is treated as literal query text, not an empty advanced-mode value',
+                (line) => {
+                    const sv = SearchView.fromString(line)
+                    expect(sv.query).toEqual(line)
+                    expect(sv.label).toBeNull()
+                    expect(sv.account).toBeNull()
+                    expect(sv.columns).toEqual([])
+                })
             test('Full basic query', () => {
                 const sv = SearchView.fromString(`type: ${kType}
 ${kComment}
@@ -127,6 +142,10 @@ account: ${TestAccountOpen.alias}`)
         limit: ${kLimit}
         ${kInvalidKey}: ${kInvalidValue}
         columns: ${kColumns}`)).toThrow(new Error(`Invalid key: ${kInvalidKey}`))
+            })
+            test('Invalid keyword key on a single line still throws instead of becoming literal query text', () => {
+                expect(() => SearchView.fromString(`${kInvalidKey}: ${kInvalidValue}`))
+                    .toThrow(new Error(`Invalid key: ${kInvalidKey}`))
             })
             test('Invalid type', () => {
                 expect(() => SearchView.fromString(`type: ${kTypeInvalid}

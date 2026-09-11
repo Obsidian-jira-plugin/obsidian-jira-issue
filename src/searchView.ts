@@ -18,13 +18,25 @@ export class SearchView {
         for (const line of lines) {
             const [key, ...values] = line.split(':')
             const value = values.join(':').trim()
+            const trimmedKey = key.trim()
+            // A colon alone doesn't mean advanced "key: value" syntax - a plain JQL query can
+            // legitimately contain one too, e.g. `assignee = 70121:a1118173-...` (modern Jira
+            // Cloud accountId format). Real key names never contain whitespace, while JQL text
+            // before such a colon almost always does (operators, conditions, etc.), so use that
+            // instead of a hardcoded key list (which would just duplicate the switch's case
+            // labels below and could drift out of sync with it). Also require a non-empty value,
+            // matching the original "empty value always means basic mode" safety net - without
+            // it, a line that's just a bare reserved word like `query` or `label` (with no real
+            // value) would be silently accepted as advanced mode with an empty value instead of
+            // throwing, e.g. turning into an unintended empty/match-all search.
+            const looksLikeKeyValueLine = value.length > 0 && trimmedKey.length > 0 && !/\s/.test(trimmedKey)
 
-            if (!value && lines.length === 1) {
+            if (!looksLikeKeyValueLine && lines.length === 1) {
                 // Basic mode with only the query
                 sv.query = line
             } else {
                 // Advanced mode with key value structure
-                switch (key.trim().toLowerCase()) {
+                switch (trimmedKey.toLowerCase()) {
                     case 'type':
                         if (value.toUpperCase() in ESearchResultsRenderingTypes) {
                             sv.type = value.toUpperCase() as ESearchResultsRenderingTypes
@@ -90,7 +102,7 @@ export class SearchView {
                         sv.label = value
                         break
                     default:
-                        throw new Error(`Invalid key: ${key.trim()}`)
+                        throw new Error(`Invalid key: ${trimmedKey}`)
                 }
             }
         }
