@@ -15,7 +15,7 @@ function getRenderStyleClass(): string {
     return SettingsData.renderStyle === ERenderStyle.CLASSIC ? 'ji-style-classic' : 'ji-style-modern'
 }
 
-interface IMatchDecoratorRef {
+export interface IMatchDecoratorRef {
     ref: MatchDecorator
 }
 
@@ -128,7 +128,7 @@ function buildMatchDecorators() {
     }
 }
 
-function buildViewPluginClass(matchDecorator: IMatchDecoratorRef) {
+export function buildViewPluginClass(matchDecorator: IMatchDecoratorRef) {
     class ViewPluginClass implements PluginValue {
         decorators: DecorationSet
 
@@ -139,7 +139,12 @@ function buildViewPluginClass(matchDecorator: IMatchDecoratorRef) {
         update(update: ViewUpdate): void {
             const editorModeChanged = update.startState.field(editorLivePreviewField) !== update.state.field(editorLivePreviewField)
             const hasRefreshEffect = update.transactions.some(tr => tr.effects.some(e => e.is(refreshInlineIssuesEffect)))
-            if (update.docChanged || update.startState.selection.main !== update.state.selection.main || editorModeChanged || hasRefreshEffect) {
+            // MatchDecorator.createDeco() only computes decorations for the current viewport
+            // (see @codemirror/view's own docs), so viewportChanged - e.g. scrolling to reveal
+            // previously off-screen lines - must trigger a recompute too. Without it, inline
+            // issue tags that scroll into view stay as unrendered plain text until some other
+            // trigger (a doc edit or cursor move) happens to fire alongside it.
+            if (update.docChanged || update.viewportChanged || update.startState.selection.main !== update.state.selection.main || editorModeChanged || hasRefreshEffect) {
                 this.decorators = matchDecorator.ref ? matchDecorator.ref.createDeco(update.view) : RangeSet.empty
             }
         }
