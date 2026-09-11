@@ -71,6 +71,15 @@ class InlineIssueWidget extends WidgetType {
     toDOM(view: EditorView): HTMLElement {
         return this._htmlContainer
     }
+
+    eq(other: InlineIssueWidget): boolean {
+        // WidgetType's default eq() always returns false, meaning every match is torn down and
+        // redrawn on every decoration recompute. Since createDeco()/updateDeco() build a fresh
+        // widget instance per match, without this override even an unchanged, already-rendered
+        // tag would flicker and rebuild its DOM (and re-run the cache lookup in buildTag()) on
+        // every recompute - which now also happens on scroll, not just doc/selection changes.
+        return other._issueKey === this._issueKey && other._compact === this._compact && other._host === this._host
+    }
 }
 
 // Global variable with the last instance of the MatchDecorator rebuilt every time the settings are changed
@@ -137,15 +146,33 @@ export function buildViewPluginClass(matchDecorator: IMatchDecoratorRef) {
         }
 
         update(update: ViewUpdate): void {
+            if (!matchDecorator.ref) {
+                this.decorators = RangeSet.empty
+                return
+            }
+
             const editorModeChanged = update.startState.field(editorLivePreviewField) !== update.state.field(editorLivePreviewField)
             const hasRefreshEffect = update.transactions.some(tr => tr.effects.some(e => e.is(refreshInlineIssuesEffect)))
-            // MatchDecorator.createDeco() only computes decorations for the current viewport
-            // (see @codemirror/view's own docs), so viewportChanged - e.g. scrolling to reveal
-            // previously off-screen lines - must trigger a recompute too. Without it, inline
-            // issue tags that scroll into view stay as unrendered plain text until some other
-            // trigger (a doc edit or cursor move) happens to fire alongside it.
-            if (update.docChanged || update.viewportChanged || update.startState.selection.main !== update.state.selection.main || editorModeChanged || hasRefreshEffect) {
-                this.decorators = matchDecorator.ref ? matchDecorator.ref.createDeco(update.view) : RangeSet.empty
+            const selectionChanged = update.startState.selection.main !== update.state.selection.main
+
+            if (editorModeChanged || hasRefreshEffect || selectionChanged) {
+                // A mode switch can change every match's decoration type (mark vs. widget); a
+                // refresh effect (dispatched after a settings change) means matchDecorator.ref
+                // may now be a brand new MatchDecorator instance - updateDeco() requires its
+                // `deco` argument to have come from *this exact* MatchDecorator, so it's not safe
+                // to hand off to it. A selection change can also flip a match's decoration type,
+                // since isCursorInsideTag()/isSelectionContainsTag() key off the cursor position -
+                // something updateDeco()'s own dirty-tracking (doc/viewport changes only) has no
+                // way to know affects the output. All three need a full recompute.
+                this.decorators = matchDecorator.ref.createDeco(update.view)
+            } else if (update.docChanged || update.viewportChanged) {
+                // updateDeco() only computes decorations for the current viewport too, so a
+                // viewport change (e.g. scrolling to reveal previously off-screen lines) needs to
+                // trigger a recompute - without it, tags that scroll into view stay as unrendered
+                // plain text. Unlike createDeco(), updateDeco() does its own cheap bounded
+                // re-matching (or no-ops entirely) instead of always rescanning the whole
+                // viewport, so this is far cheaper to call on every scroll tick.
+                this.decorators = matchDecorator.ref.updateDeco(update, this.decorators)
             }
         }
 
