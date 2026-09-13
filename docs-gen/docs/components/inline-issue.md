@@ -71,9 +71,9 @@ Compact mode: -https://my-project.jira.com/browse/ABCD-1234
 
 To ensure inline tags fit smoothly into sentences, bullet points, and tables without breaking layouts:
 - Summaries and statuses exceeding the configured maximum width (e.g. `20rem` for summaries, `2rem` for statuses) stay on a single compact line.
-- When hovering or focusing over an overflowing tag, the text automatically scrolls horizontally to reveal the complete summary or status.
+- When `Animate overflowing text` is enabled, overflowing text scrolls horizontally to reveal the complete summary or status.
 - The full summary and status are also always accessible via tooltip.
-- If your operating system has *Reduced Motion* enabled, scrolling is disabled and text is truncated with an ellipsis (`...`).
+- The animation is disabled by default. It also remains disabled when your operating system has *Reduced Motion* enabled, leaving text truncated with an ellipsis (`...`).
 
 ### Account Color Bands
 

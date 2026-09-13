@@ -28,7 +28,7 @@ export default class JiraIssuePlugin extends Plugin {
         this.registerAPI()
         this._settingTab = new JiraIssueSettingTab(this.app, this)
         await this._settingTab.loadSettings()
-        applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
+        applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem, SettingsData.animateOverflowingText)
         this.addSettingTab(this._settingTab)
         void JiraClient.updateCustomFieldsCache()
         // Load icons
@@ -60,7 +60,7 @@ export default class JiraIssuePlugin extends Plugin {
                 void JiraClient.updateCustomFieldsCache()
             }
             this._inlineIssueViewPlugin.update()
-            applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
+            applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem, SettingsData.animateOverflowingText)
         })
 
         const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')

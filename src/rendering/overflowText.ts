@@ -26,6 +26,7 @@ const scheduledRootRefreshes = new Map<Window, number>()
 // first), so the sweep keeps running even if that popout window is later closed.
 const DISCONNECTED_ELEMENTS_SWEEP_MS = 30000
 let cleanupIntervalId: number | null = null
+let overflowAnimationEnabled = false
 
 export function calculateOverflowAnimation(textWidth: number, viewportWidth: number): OverflowAnimationMetrics | null {
     const distancePx = Math.max(0, Math.ceil(textWidth - viewportWidth))
@@ -151,6 +152,9 @@ export function refreshOverflowElement(element: HTMLElement): void {
     }
 
     stopOverflowAnimation(element)
+    if (!overflowAnimationEnabled) {
+        return
+    }
     const metrics = calculateOverflowAnimation(text.scrollWidth, viewport.clientWidth)
     if (!metrics) {
         return
@@ -177,6 +181,10 @@ export function refreshOverflowElement(element: HTMLElement): void {
 }
 
 export function scheduleOverflowElementRefresh(element: HTMLElement): void {
+    if (!overflowAnimationEnabled) {
+        return
+    }
+
     const refresh = () => {
         observeOverflowElement(element)
         scheduleElementRefresh(element)
@@ -191,6 +199,10 @@ export function scheduleOverflowElementRefresh(element: HTMLElement): void {
 
 export function refreshAllOverflowElements(root: ParentNode = document): void {
     stopTrackingDisconnectedElements()
+    if (!overflowAnimationEnabled) {
+        root.querySelectorAll<HTMLElement>(OVERFLOW_TAG_SELECTOR).forEach(stopOverflowElementTracking)
+        return
+    }
     root.querySelectorAll<HTMLElement>(OVERFLOW_TAG_SELECTOR).forEach(element => {
         observeOverflowElement(element)
         refreshOverflowElement(element)
@@ -215,14 +227,19 @@ export function scheduleAllOverflowElementsRefresh(root: ParentNode = document):
     scheduledRootRefreshes.set(ownerWindow, frameId)
 }
 
-export function applyOverflowWidths(root: ParentNode, summaryWidthRem: number, statusWidthRem: number): void {
+export function applyOverflowWidths(root: ParentNode, summaryWidthRem: number, statusWidthRem: number, animationEnabled = false): void {
+    overflowAnimationEnabled = animationEnabled
     root.querySelectorAll<HTMLElement>(ISSUE_SUMMARY_SELECTOR).forEach(element => {
         element.style.maxWidth = `${summaryWidthRem}rem`
     })
     root.querySelectorAll<HTMLElement>(ISSUE_STATUS_SELECTOR).forEach(element => {
         element.style.maxWidth = `${statusWidthRem}rem`
     })
-    scheduleAllOverflowElementsRefresh(root)
+    if (overflowAnimationEnabled) {
+        scheduleAllOverflowElementsRefresh(root)
+    } else {
+        stopAllOverflowElements(root)
+    }
 }
 
 export function stopAllOverflowElements(root: ParentNode = document): void {
