@@ -1,3 +1,5 @@
+import { SettingsData } from "../settings"
+
 const SCROLL_SPEED_PX_PER_SECOND = 30
 const EDGE_PAUSE_MS = 1000
 const OVERFLOW_TAG_SELECTOR = '.ji-overflow-tag'
@@ -26,7 +28,10 @@ const scheduledRootRefreshes = new Map<Window, number>()
 // first), so the sweep keeps running even if that popout window is later closed.
 const DISCONNECTED_ELEMENTS_SWEEP_MS = 30000
 let cleanupIntervalId: number | null = null
-let overflowAnimationEnabled = false
+// Cache of the last value applyOverflowWidths() acted on, used only to skip a redundant
+// DOM-wide stop-sweep when the setting hasn't actually changed since last time (e.g. on
+// unrelated settings saves). Not a source of truth - readers below use SettingsData directly.
+let lastAppliedAnimationEnabled: boolean | undefined
 
 export function calculateOverflowAnimation(textWidth: number, viewportWidth: number): OverflowAnimationMetrics | null {
     const distancePx = Math.max(0, Math.ceil(textWidth - viewportWidth))
@@ -152,7 +157,7 @@ export function refreshOverflowElement(element: HTMLElement): void {
     }
 
     stopOverflowAnimation(element)
-    if (!overflowAnimationEnabled) {
+    if (!SettingsData.animateOverflowingText) {
         return
     }
     const metrics = calculateOverflowAnimation(text.scrollWidth, viewport.clientWidth)
@@ -181,7 +186,7 @@ export function refreshOverflowElement(element: HTMLElement): void {
 }
 
 export function scheduleOverflowElementRefresh(element: HTMLElement): void {
-    if (!overflowAnimationEnabled) {
+    if (!SettingsData.animateOverflowingText) {
         return
     }
 
@@ -199,7 +204,7 @@ export function scheduleOverflowElementRefresh(element: HTMLElement): void {
 
 export function refreshAllOverflowElements(root: ParentNode = document): void {
     stopTrackingDisconnectedElements()
-    if (!overflowAnimationEnabled) {
+    if (!SettingsData.animateOverflowingText) {
         root.querySelectorAll<HTMLElement>(OVERFLOW_TAG_SELECTOR).forEach(stopOverflowElementTracking)
         return
     }
@@ -227,19 +232,24 @@ export function scheduleAllOverflowElementsRefresh(root: ParentNode = document):
     scheduledRootRefreshes.set(ownerWindow, frameId)
 }
 
-export function applyOverflowWidths(root: ParentNode, summaryWidthRem: number, statusWidthRem: number, animationEnabled = false): void {
-    overflowAnimationEnabled = animationEnabled
+export function applyOverflowWidths(root: ParentNode, summaryWidthRem: number, statusWidthRem: number): void {
     root.querySelectorAll<HTMLElement>(ISSUE_SUMMARY_SELECTOR).forEach(element => {
         element.style.maxWidth = `${summaryWidthRem}rem`
     })
     root.querySelectorAll<HTMLElement>(ISSUE_STATUS_SELECTOR).forEach(element => {
         element.style.maxWidth = `${statusWidthRem}rem`
     })
-    if (overflowAnimationEnabled) {
+
+    const animationEnabled = SettingsData.animateOverflowingText
+    if (animationEnabled) {
         scheduleAllOverflowElementsRefresh(root)
-    } else {
+    } else if (lastAppliedAnimationEnabled !== false) {
+        // Only sweep to stop tracking when the setting actually just turned off (or on the
+        // very first call) - once confirmed off, later unrelated settings saves have nothing
+        // left to stop and shouldn't pay for a synchronous full-document query every time.
         stopAllOverflowElements(root)
     }
+    lastAppliedAnimationEnabled = animationEnabled
 }
 
 export function stopAllOverflowElements(root: ParentNode = document): void {

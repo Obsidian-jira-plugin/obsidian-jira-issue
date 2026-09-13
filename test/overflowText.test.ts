@@ -1,3 +1,6 @@
+jest.mock('obsidian')
+jest.mock('../src/client/jiraClient')
+
 import {
     applyOverflowWidths,
     calculateOverflowAnimation,
@@ -5,6 +8,7 @@ import {
     scheduleOverflowElementRefresh,
     stopAllOverflowElements,
 } from '../src/rendering/overflowText'
+import { SettingsData } from '../src/settings'
 
 describe('OverflowText', () => {
     const emptyRoot = { ownerDocument: null, querySelectorAll: (): HTMLElement[] => [] } as unknown as ParentNode
@@ -13,7 +17,8 @@ describe('OverflowText', () => {
         // The cleanup interval is module-level singleton state (one interval for the whole
         // plugin, not per window) - reset it between tests regardless of what each test did.
         stopAllOverflowElements({ querySelectorAll: (): HTMLElement[] => [] } as unknown as ParentNode)
-        applyOverflowWidths(emptyRoot, 20, 2, false)
+        SettingsData.animateOverflowingText = false
+        applyOverflowWidths(emptyRoot, 20, 2)
         delete (global as any).window
     })
 
@@ -69,7 +74,8 @@ describe('OverflowText', () => {
                 : { scrollWidth: 120, animate }),
         } as unknown as HTMLElement
 
-        applyOverflowWidths(emptyRoot, 20, 2, false)
+        SettingsData.animateOverflowingText = false
+        applyOverflowWidths(emptyRoot, 20, 2)
         refreshOverflowElement(element)
 
         expect(animate).not.toHaveBeenCalled()
@@ -86,7 +92,8 @@ describe('OverflowText', () => {
                 : { scrollWidth: 120, animate }),
         } as unknown as HTMLElement
 
-        applyOverflowWidths(emptyRoot, 20, 2, true)
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         refreshOverflowElement(element)
 
         expect(animate).toHaveBeenCalledTimes(1)
@@ -108,16 +115,19 @@ describe('OverflowText', () => {
             querySelectorAll: jest.fn((selector: string) => selector === '.ji-overflow-tag' ? [element] : []),
         } as unknown as ParentNode
 
-        applyOverflowWidths(emptyRoot, 20, 2, true)
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         refreshOverflowElement(element)
-        applyOverflowWidths(root, 20, 2, false)
+        SettingsData.animateOverflowingText = false
+        applyOverflowWidths(root, 20, 2)
 
         expect(cancel).toHaveBeenCalledTimes(1)
         expect(element.classList.remove).toHaveBeenCalledWith('is-overflowing')
     })
 
     test('refreshes an overflow tag when its viewport is resized', () => {
-        applyOverflowWidths(emptyRoot, 20, 2, true)
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         let resizeCallback: () => void
         const observe = jest.fn()
         const disconnect = jest.fn()
@@ -172,7 +182,8 @@ describe('OverflowText', () => {
     })
 
     test('periodically sweeps and stops tracking elements removed from the DOM', () => {
-        applyOverflowWidths(emptyRoot, 20, 2, true)
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         let sweepCallback: () => void
         const observe = jest.fn()
         const disconnect = jest.fn()
@@ -213,7 +224,8 @@ describe('OverflowText', () => {
     })
 
     test('uses a single global sweep interval even for elements from a different (e.g. popout) window', () => {
-        applyOverflowWidths(emptyRoot, 20, 2, true)
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         const mainWindow = {
             ResizeObserver: class {
                 constructor() { /* not exercised */ }
