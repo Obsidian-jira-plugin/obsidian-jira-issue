@@ -120,9 +120,13 @@ describe('RenderingCommon', () => {
 
             expect(summary).toBeDefined()
             expect(summary.attributes.style).toEqual('max-width: 20rem')
+            expect(summary.title).toEqual('')
+            expect(summary.attributes['aria-label']).toEqual(issue.fields.summary)
             expect(summary.children[0].children[0].textContent).toEqual(issue.fields.summary)
             expect(status).toBeDefined()
             expect(status.attributes.style).toEqual('max-width: 2rem')
+            expect(status.title).toEqual('')
+            expect(status.attributes['aria-label']).toEqual('A very long status: Status description')
             expect(status.children[0].children[0].textContent).toEqual(issue.fields.status.name)
         })
 

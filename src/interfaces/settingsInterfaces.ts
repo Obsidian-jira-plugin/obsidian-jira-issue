@@ -55,6 +55,7 @@ export interface IJiraIssueSettings {
     inlineIssuePrefix: string
     issueSummaryMaxWidthRem: number
     issueStatusMaxWidthRem: number
+    animateOverflowingText: boolean
     searchColumns: ISearchColumn[]
     logRequestsResponses: boolean
     logImagesFetch: boolean

@@ -80,6 +80,7 @@ describe('Settings', () => {
             renderStyle: DEFAULT_SETTINGS.renderStyle,
             issueSummaryMaxWidthRem: DEFAULT_SETTINGS.issueSummaryMaxWidthRem,
             issueStatusMaxWidthRem: DEFAULT_SETTINGS.issueStatusMaxWidthRem,
+            animateOverflowingText: false,
             accounts: [{
                 ...StoredSettings.accounts[0],
                 id: expect.any(String),
@@ -114,6 +115,26 @@ describe('Settings', () => {
 
         expect(SettingsData.issueSummaryMaxWidthRem).toEqual(DEFAULT_SETTINGS.issueSummaryMaxWidthRem)
         expect(SettingsData.issueStatusMaxWidthRem).toEqual(DEFAULT_SETTINGS.issueStatusMaxWidthRem)
+    })
+    test('loadSettings only enables overflow animation for an explicit boolean true', async () => {
+        pluginMock.loadData.mockReturnValueOnce({
+            ...deepCopy(StoredSettings),
+            animateOverflowingText: 'true',
+        })
+
+        await settingTab.loadSettings()
+
+        expect(SettingsData.animateOverflowingText).toBe(false)
+    })
+    test('loadSettings preserves an explicitly enabled overflow animation', async () => {
+        pluginMock.loadData.mockReturnValueOnce({
+            ...deepCopy(StoredSettings),
+            animateOverflowingText: true,
+        })
+
+        await settingTab.loadSettings()
+
+        expect(SettingsData.animateOverflowingText).toBe(true)
     })
     test('saveSettings calls onChange listener with options', async () => {
         const listener = jest.fn()

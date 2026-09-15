@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     inlineIssuePrefix: 'JIRA:',
     issueSummaryMaxWidthRem: 20,
     issueStatusMaxWidthRem: 2,
+    animateOverflowingText: false,
     showColorBand: true,
     showJiraLink: true,
     credentialStorageType: ECredentialStorageType.KEYCHAIN,
@@ -115,6 +116,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         const storedData = (await this._plugin.loadData()) || {}
         // Read plugin data and fill new fields with default values
         Object.assign(SettingsData, DEFAULT_SETTINGS, storedData)
+        SettingsData.animateOverflowingText = SettingsData.animateOverflowingText === true
         SettingsData.issueSummaryMaxWidthRem = normalizePositiveNumber(SettingsData.issueSummaryMaxWidthRem, DEFAULT_SETTINGS.issueSummaryMaxWidthRem)
         SettingsData.issueStatusMaxWidthRem = normalizePositiveNumber(SettingsData.issueStatusMaxWidthRem, DEFAULT_SETTINGS.issueStatusMaxWidthRem)
 
@@ -696,7 +698,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Issue summary maximum width')
-            .setDesc('Maximum width of issue summaries in rem. Longer summaries scroll automatically.')
+            .setDesc('Maximum width of issue summaries in rem.')
             .addText(text => {
                 text
                     .setValue(SettingsData.issueSummaryMaxWidthRem.toString())
@@ -709,7 +711,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Issue status maximum width')
-            .setDesc('Maximum width of issue statuses in rem. Longer statuses scroll automatically.')
+            .setDesc('Maximum width of issue statuses in rem.')
             .addText(text => {
                 text
                     .setValue(SettingsData.issueStatusMaxWidthRem.toString())
@@ -719,6 +721,16 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     })
                 text.inputEl.setAttrs({ type: 'number', min: '0.1', step: '1' })
             })
+
+        new Setting(containerEl)
+            .setName('Animate overflowing text')
+            .setDesc('Scroll issue summaries and statuses when they exceed their maximum width. Disabled by default and ignored when reduced motion is enabled.')
+            .addToggle(toggle => toggle
+                .setValue(SettingsData.animateOverflowingText)
+                .onChange(async value => {
+                    SettingsData.animateOverflowingText = value
+                    await this.saveSettings({ isVisualOnly: true })
+                }))
 
         new Setting(containerEl)
             .setName('Show color band')

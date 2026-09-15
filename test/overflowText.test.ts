@@ -1,15 +1,24 @@
+jest.mock('obsidian')
+jest.mock('../src/client/jiraClient')
+
 import {
     applyOverflowWidths,
     calculateOverflowAnimation,
+    refreshOverflowElement,
     scheduleOverflowElementRefresh,
     stopAllOverflowElements,
 } from '../src/rendering/overflowText'
+import { SettingsData } from '../src/settings'
 
 describe('OverflowText', () => {
+    const emptyRoot = { ownerDocument: null, querySelectorAll: (): HTMLElement[] => [] } as unknown as ParentNode
+
     afterEach(() => {
         // The cleanup interval is module-level singleton state (one interval for the whole
         // plugin, not per window) - reset it between tests regardless of what each test did.
         stopAllOverflowElements({ querySelectorAll: (): HTMLElement[] => [] } as unknown as ParentNode)
+        SettingsData.animateOverflowingText = false
+        applyOverflowWidths(emptyRoot, 20, 2)
         delete (global as any).window
     })
 
@@ -55,7 +64,70 @@ describe('OverflowText', () => {
         expect(querySelectorAll).not.toHaveBeenCalledWith('.issue-status')
     })
 
+    test('keeps overflowing text truncated when animation is disabled', () => {
+        const animate = jest.fn()
+        const element = {
+            classList: { add: jest.fn(), remove: jest.fn() },
+            ownerDocument: { defaultView: { matchMedia: jest.fn(() => ({ matches: false })) } },
+            querySelector: jest.fn((selector: string) => selector === '.ji-overflow-viewport'
+                ? { clientWidth: 100 }
+                : { scrollWidth: 120, animate }),
+        } as unknown as HTMLElement
+
+        SettingsData.animateOverflowingText = false
+        applyOverflowWidths(emptyRoot, 20, 2)
+        refreshOverflowElement(element)
+
+        expect(animate).not.toHaveBeenCalled()
+        expect(element.classList.add).not.toHaveBeenCalledWith('is-overflowing')
+    })
+
+    test('animates overflowing text when the option is enabled', () => {
+        const animate = jest.fn(() => ({ cancel: jest.fn() }))
+        const element = {
+            classList: { add: jest.fn(), remove: jest.fn() },
+            ownerDocument: { defaultView: { matchMedia: jest.fn(() => ({ matches: false })) } },
+            querySelector: jest.fn((selector: string) => selector === '.ji-overflow-viewport'
+                ? { clientWidth: 100 }
+                : { scrollWidth: 120, animate }),
+        } as unknown as HTMLElement
+
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
+        refreshOverflowElement(element)
+
+        expect(animate).toHaveBeenCalledTimes(1)
+        expect(element.classList.add).toHaveBeenCalledWith('is-overflowing')
+    })
+
+    test('stops a running animation as soon as the option is disabled', () => {
+        const cancel = jest.fn()
+        const element = {
+            style: {},
+            classList: { add: jest.fn(), remove: jest.fn() },
+            ownerDocument: { defaultView: { matchMedia: jest.fn(() => ({ matches: false })) } },
+            querySelector: jest.fn((selector: string) => selector === '.ji-overflow-viewport'
+                ? { clientWidth: 100 }
+                : { scrollWidth: 120, animate: jest.fn(() => ({ cancel })) }),
+        } as unknown as HTMLElement
+        const root = {
+            ownerDocument: null,
+            querySelectorAll: jest.fn((selector: string) => selector === '.ji-overflow-tag' ? [element] : []),
+        } as unknown as ParentNode
+
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
+        refreshOverflowElement(element)
+        SettingsData.animateOverflowingText = false
+        applyOverflowWidths(root, 20, 2)
+
+        expect(cancel).toHaveBeenCalledTimes(1)
+        expect(element.classList.remove).toHaveBeenCalledWith('is-overflowing')
+    })
+
     test('refreshes an overflow tag when its viewport is resized', () => {
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         let resizeCallback: () => void
         const observe = jest.fn()
         const disconnect = jest.fn()
@@ -110,6 +182,8 @@ describe('OverflowText', () => {
     })
 
     test('periodically sweeps and stops tracking elements removed from the DOM', () => {
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         let sweepCallback: () => void
         const observe = jest.fn()
         const disconnect = jest.fn()
@@ -150,6 +224,8 @@ describe('OverflowText', () => {
     })
 
     test('uses a single global sweep interval even for elements from a different (e.g. popout) window', () => {
+        SettingsData.animateOverflowingText = true
+        applyOverflowWidths(emptyRoot, 20, 2)
         const mainWindow = {
             ResizeObserver: class {
                 constructor() { /* not exercised */ }

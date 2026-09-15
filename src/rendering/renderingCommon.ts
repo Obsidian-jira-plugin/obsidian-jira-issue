@@ -152,10 +152,9 @@ export default {
     renderOverflowTag(parent: HTMLElement, classes: string, text: string, title: string, maxWidthRem: number, attributes: Record<string, string> = {}): HTMLElement {
         const tag = createSpan({
             cls: `${classes} ji-overflow-tag`,
-            title,
             attr: {
                 ...attributes,
-                'aria-label': text,
+                'aria-label': title,
                 style: `max-width: ${maxWidthRem}rem`,
             },
             parent,
