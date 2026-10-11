@@ -1,1 +1,0 @@
-(globalThis.webpackChunkobsidian_jira_issue||=[]).push([[56],{9056(){}}]);
