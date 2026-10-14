@@ -3,7 +3,8 @@ jest.mock('../src/main', () => ({
     ObsidianApp: { vault: { getConfig: jest.fn() } }
 }))
 
-import { renderTableColumn } from '../src/rendering/renderTableColumns'
+import { formatCopyTemplate, renderTableColumn } from '../src/rendering/renderTableColumns'
+import { SettingsData } from '../src/settings'
 import { ESearchColumnsTypes, ISearchColumn } from '../src/interfaces/settingsInterfaces'
 import { IJiraIssue } from '../src/interfaces/issueInterfaces'
 import { TestAccountOpen } from './testData'
@@ -117,5 +118,18 @@ describe('renderTableColumns', () => {
         expect(cell.children[0].tagName).toEqual('a')
         expect(cell.children[0].text).toEqual('EPIC-99: Grandparent Epic')
         expect(cell.children[0].href).toEqual('https://test-company.atlassian.net/browse/EPIC-99')
+    })
+
+    test('formatCopyTemplate fills placeholders and keeps unknown ones', () => {
+        SettingsData.inlineIssuePrefix = 'JIRA:'
+        const issue = {
+            key: 'TASK-1',
+            fields: { summary: 'Fix login', status: { name: 'Done' }, assignee: null },
+            account: TestAccountOpen,
+        } as any
+
+        expect(formatCopyTemplate('{prefix}{key}', issue)).toEqual('JIRA:TASK-1')
+        expect(formatCopyTemplate('- {key} {summary} [{status}] {assignee}{nope}', issue)).toEqual('- TASK-1 Fix login [Done] {nope}')
+        expect(formatCopyTemplate('{url}', issue)).toEqual('https://test-company.atlassian.net/browse/TASK-1')
     })
 })

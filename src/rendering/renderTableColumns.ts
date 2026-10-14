@@ -1,4 +1,4 @@
-import { setIcon, TFile } from "obsidian"
+import { Notice, setIcon, TFile } from "obsidian"
 import { IJiraDevStatus, IJiraIssue } from "../interfaces/issueInterfaces"
 import RC, { JIRA_STATUS_COLOR_MAP, JIRA_STATUS_COLOR_MAP_BY_NAME } from "./renderingCommon"
 import * as jsonpath from 'jsonpath'
@@ -6,6 +6,7 @@ import ObjectsCache from "../objectsCache"
 import JiraClient from "../client/jiraClient"
 import { AVATAR_RESOLUTION, ESearchColumnsTypes, ISearchColumn } from "../interfaces/settingsInterfaces"
 import { getIssue } from "../api/apiBase"
+import { SettingsData } from "../settings"
 
 const DESCRIPTION_COMPACT_MAX_LENGTH = 20
 
@@ -35,6 +36,26 @@ function deltaToStr(delta: number): string {
         return timeStr
     }
     return ''
+}
+
+export const COPY_TEMPLATE_PLACEHOLDERS: Record<string, (issue: IJiraIssue) => string> = {
+    prefix: () => SettingsData.inlineIssuePrefix,
+    key: issue => issue.key,
+    summary: issue => issue.fields.summary,
+    status: issue => issue.fields.status?.name,
+    type: issue => issue.fields.issuetype?.name,
+    priority: issue => issue.fields.priority?.name,
+    assignee: issue => issue.fields.assignee?.displayName,
+    reporter: issue => issue.fields.reporter?.displayName,
+    project: issue => issue.fields.project?.key,
+    labels: issue => issue.fields.labels?.join(', '),
+    url: issue => RC.issueUrl(issue.account, issue.key),
+}
+
+// Unknown placeholders are left untouched so typos stay visible in the pasted text
+export function formatCopyTemplate(template: string, issue: IJiraIssue): string {
+    return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in COPY_TEMPLATE_PLACEHOLDERS ? COPY_TEMPLATE_PLACEHOLDERS[name](issue) ?? '' : match)
 }
 
 export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement): Promise<void> => {
@@ -249,6 +270,23 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
             case ESearchColumnsTypes.PROGRESS:
                 createEl('td', { text: issue.fields.progress.percent.toString() + '%', parent: row })
                 break
+            case ESearchColumnsTypes.COPY_TO_CLIPBOARD: {
+                const button = createEl('button', {
+                    cls: 'clickable-icon',
+                    attr: { 'aria-label': 'Copy ' + issue.key },
+                    parent: createEl('td', { parent: row }),
+                })
+                setIcon(button, 'copy')
+                button.addEventListener('click', () => {
+                    navigator.clipboard.writeText(formatCopyTemplate(SettingsData.copyColumnTemplate, issue))
+                        .then(() => {
+                            setIcon(button, 'check')
+                            window.setTimeout(() => setIcon(button, 'copy'), 1000)
+                        })
+                        .catch(() => new Notice('Failed to copy to clipboard'))
+                })
+                break
+            }
             case ESearchColumnsTypes.CUSTOM_FIELD: {
                 const customCell = createEl('td', { parent: row })
                 await renderCustomFieldCell(issue, column.extra, customCell)
