@@ -2,8 +2,10 @@ import { MarkdownPostProcessorContext } from "obsidian"
 import JiraClient from "../client/jiraClient"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
 import { COMPACT_SYMBOL, ERenderStyle, JIRA_KEY_REGEX } from "../interfaces/settingsInterfaces"
+import LastGoodCache from "../lastGoodCache"
 import ObjectsCache from "../objectsCache"
 import { SettingsData } from "../settings"
+import { getAccountByHost, getIssueCacheKey } from "../utils"
 import RC from "./renderingCommon"
 
 // TODO: support explicit account selection in inline issues
@@ -62,7 +64,7 @@ function convertInlineIssuesUrlToTags(el: HTMLElement): void {
             issueUrlElements.forEach((issueUrlElement: HTMLAnchorElement) => {
                 const compact = issueUrlElement.previousSibling && issueUrlElement.previousSibling.textContent.endsWith('-')
                 const issueKey = issueUrlElement.href.replace(`${account.host}/browse/`, '')
-                const container = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}`, attr: { 'data-issue-key': issueKey, 'data-compact': compact } })
+                const container = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}`, attr: { 'data-issue-key': issueKey, 'data-host': account.host, 'data-compact': compact } })
                 container.appendChild(RC.renderLoadingItem(issueKey, true))
                 issueUrlElement.replaceWith(container)
             })
@@ -78,22 +80,25 @@ export const InlineIssueRenderer = async (el: HTMLElement, ctx: MarkdownPostProc
     const inlineIssueTags: NodeListOf<HTMLSpanElement> = el.querySelectorAll(`span.ji-inline-issue`)
     inlineIssueTags.forEach((value: HTMLSpanElement) => {
         const issueKey = value.getAttribute('data-issue-key')
+        const host = value.getAttribute('data-host')
         const compact = value.getAttribute('data-compact') === 'true'
-        const cachedIssue = ObjectsCache.get(issueKey)
+        const cacheKey = getIssueCacheKey(issueKey, host)
+        const cachedIssue = ObjectsCache.get(cacheKey)
         if (cachedIssue) {
             if (cachedIssue.isError) {
-                value.replaceChildren(RC.renderIssueError(issueKey, cachedIssue.data as string))
+                value.replaceChildren(RC.renderIssueFailure(issueKey, cachedIssue.data, compact, cacheKey))
             } else {
                 value.replaceChildren(RC.renderIssue(cachedIssue.data as IJiraIssue, compact))
             }
         } else {
             value.replaceChildren(RC.renderLoadingItem(issueKey))
-            JiraClient.getIssue(issueKey).then(newIssue => {
-                const issue = ObjectsCache.add(issueKey, newIssue).data as IJiraIssue
+            JiraClient.getIssue(issueKey, { account: getAccountByHost(host) }).then(newIssue => {
+                const issue = ObjectsCache.add(cacheKey, newIssue).data as IJiraIssue
                 value.replaceChildren(RC.renderIssue(issue, compact))
+                LastGoodCache.rememberIssue(cacheKey, issue)
             }).catch(err => {
-                ObjectsCache.add(issueKey, err, true)
-                value.replaceChildren(RC.renderIssueError(issueKey, err))
+                ObjectsCache.add(cacheKey, err, true)
+                value.replaceChildren(RC.renderIssueFailure(issueKey, err, compact, cacheKey))
             })
         }
     })

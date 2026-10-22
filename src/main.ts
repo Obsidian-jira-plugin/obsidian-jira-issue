@@ -1,6 +1,7 @@
 import { App, Editor, MarkdownView, Notice, Plugin } from 'obsidian'
 import { JiraIssueSettingTab, SettingsData } from './settings'
 import JiraClient from './client/jiraClient'
+import LastGoodCache from './lastGoodCache'
 import ObjectsCache from './objectsCache'
 import { ColumnsSuggest } from './suggestions/columnsSuggest'
 import { CountFenceRenderer } from './rendering/countFenceRenderer'
@@ -28,6 +29,8 @@ export default class JiraIssuePlugin extends Plugin {
         this.registerAPI()
         this._settingTab = new JiraIssueSettingTab(this.app, this)
         await this._settingTab.loadSettings()
+        const pluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/${this.manifest.id}`
+        await LastGoodCache.load(this.app.vault.adapter, `${pluginDir}/issues-cache.json`)
         applyOverflowWidths(document, SettingsData.issueSummaryMaxWidthRem, SettingsData.issueStatusMaxWidthRem)
         this.addSettingTab(this._settingTab)
         void JiraClient.updateCustomFieldsCache()
@@ -79,6 +82,7 @@ export default class JiraIssuePlugin extends Plugin {
             name: 'Clear cache',
             callback: () => {
                 ObjectsCache.clear()
+                void LastGoodCache.clear()
                 void JiraClient.updateCustomFieldsCache()
                 new Notice('JiraIssue: Cache cleaned')
             }
@@ -109,6 +113,7 @@ export default class JiraIssuePlugin extends Plugin {
     }
 
     onunload() {
+        void LastGoodCache.flush()
         stopAllOverflowElements(document)
         this._settingTab = null
         this._columnsSuggest = null

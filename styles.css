@@ -252,6 +252,18 @@
     color: rgba(0, 0, 0, 0.7);
 }
 
+/* ji-tags stale marker: last good content shown because the refresh failed */
+.jira-issue-container .ji-tag.ji-stale-marker {
+    cursor: help;
+    font-weight: 700;
+}
+
+.jira-issue-container .search-footer .ji-tag.ji-stale-marker {
+    font-size: 1em;
+    margin-right: 0.5em;
+    padding: 0 0.5em;
+}
+
 /* ji-tags is-danger */
 .jira-issue-container .ji-tag.is-danger {
     background-color: #f14668;
