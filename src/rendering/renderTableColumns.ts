@@ -37,7 +37,9 @@ function deltaToStr(delta: number): string {
     return ''
 }
 
-export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement): Promise<void> => {
+// offline: the issue comes from the saved results shown while Jira is unreachable, so columns
+// that need more data from Jira only use what is already in memory
+export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement, offline = false): Promise<void> => {
     let markdownNotes: TFile[] = null
     for (const column of columns) {
         switch (column.type) {
@@ -251,7 +253,7 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
                 break
             case ESearchColumnsTypes.CUSTOM_FIELD: {
                 const customCell = createEl('td', { parent: row })
-                await renderCustomFieldCell(issue, column.extra, customCell)
+                await renderCustomFieldCell(issue, column.extra, customCell, offline)
                 break
             }
             case ESearchColumnsTypes.NOTES: {
@@ -287,13 +289,13 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
                 const devStatusCacheItem = ObjectsCache.get(cacheKey)
                 if (devStatusCacheItem) {
                     devStatus = devStatusCacheItem.data as IJiraDevStatus
-                } else {
+                } else if (!offline) {
                     devStatus = await JiraClient.getDevStatus(issue.id, { account: issue.account })
                     ObjectsCache.add(cacheKey, devStatus)
                 }
                 const cell = createEl('td', { parent: row })
-                const prDetails = devStatus.summary.pullrequest.overall.details
-                if (prDetails.openCount + prDetails.mergedCount + prDetails.declinedCount > 0) {
+                const prDetails = devStatus?.summary.pullrequest.overall.details
+                if (prDetails && prDetails.openCount + prDetails.mergedCount + prDetails.declinedCount > 0) {
                     if (prDetails.openCount > 0) {
                         const prOpen = createSpan({ parent: cell, cls: `pull-request-tag pull-request-open ${RC.getTheme()}`, title: 'Open pull-request' })
                         setIcon(prOpen, 'jira-issue-git-pull-request')
@@ -359,7 +361,15 @@ function getEpicColor(key: string): string {
     return JIRA_EPIC_COLORS[index]
 }
 
-async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?: string; summary?: string; isParentFallback?: boolean } | null> {
+// Offline the lookup fails right away, so the callers fall back to what the issue already has
+async function lookupIssue(issueKey: string, issue: IJiraIssue, offline: boolean): Promise<IJiraIssue> {
+    if (offline) {
+        throw new Error('Jira lookups are skipped while showing saved results')
+    }
+    return getIssue(issueKey, { fields: ['*all'], account: issue.account })
+}
+
+async function resolveEpic(issue: IJiraIssue, depth = 0, offline = false): Promise<{ key?: string; summary?: string; isParentFallback?: boolean } | null> {
     if (!issue || !issue.fields || depth > 3) {
         return null
     }
@@ -371,7 +381,7 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
         const epicVal = issue.fields[`customfield_${customEpicFieldId}`]
         if (typeof epicVal === 'string') {
             try {
-                const epicIssue = await getIssue(epicVal, { fields: ['*all'], account: issue.account })
+                const epicIssue = await lookupIssue(epicVal, issue, offline)
                 return { key: epicVal, summary: epicIssue?.fields?.summary || epicVal }
             } catch {
                 return { key: epicVal }
@@ -402,9 +412,9 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
             }
             // Fetch parent Story/Task details (cached in ObjectsCache) and recursively resolve its Epic
             try {
-                const parentStory = await getIssue(parent.key, { fields: ['*all'], account: issue.account })
+                const parentStory = await lookupIssue(parent.key, issue, offline)
                 if (parentStory) {
-                    const parentEpic = await resolveEpic(parentStory, depth + 1)
+                    const parentEpic = await resolveEpic(parentStory, depth + 1, offline)
                     if (parentEpic && !parentEpic.isParentFallback) {
                         return parentEpic
                     }
@@ -427,7 +437,7 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
         if (typeof val === 'string' && /^[A-Za-z0-9_]+-\d+$/.test(val.trim())) {
             const epicKey = val.trim()
             try {
-                const fetchedEpic = await getIssue(epicKey, { fields: ['*all'], account: issue.account })
+                const fetchedEpic = await lookupIssue(epicKey, issue, offline)
                 if (fetchedEpic && fetchedEpic.fields) {
                     return { key: epicKey, summary: fetchedEpic.fields.summary || epicKey }
                 }
@@ -451,7 +461,7 @@ export const VIRTUAL_EPIC_ALIASES = ['EPIC', 'EPIC LINK', 'EPIC NAME', 'EPIC_LIN
 export const VIRTUAL_PARENT_ALIASES = ['PARENT', 'PARENT LINK', 'PARENT NAME', 'PARENT_LINK', 'PARENT_NAME']
 export const VIRTUAL_CUSTOM_FIELD_ALIASES = [...VIRTUAL_EPIC_ALIASES, ...VIRTUAL_PARENT_ALIASES]
 
-async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement): Promise<void> {
+async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement, offline: boolean): Promise<void> {
     const rawField = customField
     if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
         customField = issue.account.cache.customFieldsNameToId[customField] || customField
@@ -461,7 +471,7 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
 
     // 1. Epic Link / Epic Name virtual column
     if (customField === 'VIRTUAL_EPIC_NAME' || VIRTUAL_EPIC_ALIASES.includes(fieldUpper)) {
-        const epic = await resolveEpic(issue)
+        const epic = await resolveEpic(issue, 0, offline)
         if (epic && (epic.key || epic.summary)) {
             const epicKey = epic.key
             const epicSummary = epic.summary

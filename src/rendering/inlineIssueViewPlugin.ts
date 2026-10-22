@@ -3,10 +3,11 @@ import { Decoration, DecorationSet, EditorView, MatchDecorator, PluginSpec, Plug
 import { editorLivePreviewField } from "obsidian"
 import JiraClient from "../client/jiraClient"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
+import LastGoodCache from "../lastGoodCache"
 import ObjectsCache from "../objectsCache"
 import { SettingsData } from "../settings"
 import RC from "./renderingCommon"
-import { getAccountByHost } from "../utils"
+import { getAccountByHost, getIssueCacheKey } from "../utils"
 import { COMPACT_SYMBOL, ERenderStyle, JIRA_KEY_REGEX } from "../interfaces/settingsInterfaces"
 
 export const refreshInlineIssuesEffect = StateEffect.define<void>()
@@ -38,32 +39,35 @@ class InlineIssueWidget extends WidgetType {
     private _issueKey: string
     private _compact: boolean
     private _host: string
+    private _cacheKey: string
     private _htmlContainer: HTMLElement
     constructor(key: string, compact: boolean, host: string = null) {
         super()
         this._issueKey = key
         this._compact = compact
         this._host = host
+        this._cacheKey = getIssueCacheKey(key, host)
         this._htmlContainer = createSpan({ cls: `ji-inline-issue jira-issue-container ${getRenderStyleClass()}` })
         this.buildTag()
     }
 
     buildTag() {
-        const cachedIssue = ObjectsCache.get(this._issueKey)
+        const cachedIssue = ObjectsCache.get(this._cacheKey)
         if (cachedIssue) {
             if (cachedIssue.isError) {
-                this._htmlContainer.replaceChildren(RC.renderIssueError(this._issueKey, cachedIssue.data as string))
+                this._htmlContainer.replaceChildren(RC.renderIssueFailure(this._issueKey, cachedIssue.data, this._compact, this._cacheKey))
             } else {
                 this._htmlContainer.replaceChildren(RC.renderIssue(cachedIssue.data as IJiraIssue, this._compact))
             }
         } else {
             this._htmlContainer.replaceChildren(RC.renderLoadingItem(this._issueKey))
             JiraClient.getIssue(this._issueKey, { account: getAccountByHost(this._host) }).then(newIssue => {
-                const issue = ObjectsCache.add(this._issueKey, newIssue).data as IJiraIssue
+                const issue = ObjectsCache.add(this._cacheKey, newIssue).data as IJiraIssue
                 this._htmlContainer.replaceChildren(RC.renderIssue(issue, this._compact))
+                LastGoodCache.rememberIssue(this._cacheKey, issue)
             }).catch(err => {
-                ObjectsCache.add(this._issueKey, err, true)
-                this._htmlContainer.replaceChildren(RC.renderIssueError(this._issueKey, err))
+                ObjectsCache.add(this._cacheKey, err, true)
+                this._htmlContainer.replaceChildren(RC.renderIssueFailure(this._issueKey, err, this._compact, this._cacheKey))
             })
         }
     }
