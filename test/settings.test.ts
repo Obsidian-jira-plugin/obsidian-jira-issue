@@ -26,6 +26,7 @@ const StoredSettings = {
         columns: ['column1', 'column2']
     },
     cacheTime: 'cacheTimeVal',
+    requestTimeout: 'requestTimeoutVal',
     colorSchema: EColorSchema.LIGHT,
     inlineIssuePrefix: 'inlineIssuePrefixVal',
     inlineIssueUrlToTag: true,

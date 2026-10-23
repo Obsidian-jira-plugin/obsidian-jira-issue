@@ -23,6 +23,11 @@ Examples
 |`2h`|2 hours|
 |`1d`|1 day|
 
+## Request timeout
+How long the plugin waits for Jira to answer a request. After that the request counts as failed, and issues, searches and counts show the last data loaded successfully, marked with a `!`. Without a timeout, a request sent on a connection that stopped working (for example right after switching VPN) could stay on "Loading ..." forever.
+
+The default value is `20s`. It uses the same syntax as the cache time. Increase it if large searches on a slow Jira server time out.
+
 ## Debug mode
 In order to help users debug authentication issues and provide useful information when submitting new Issues on GitHub, the plugin provides a way to increase the debug information in the Obsidian.md console.
 

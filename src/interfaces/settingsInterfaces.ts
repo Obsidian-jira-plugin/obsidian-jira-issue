@@ -46,6 +46,7 @@ export interface IJiraIssueSettings {
     accounts: IJiraIssueAccountSettings[]
     apiBasePath: string
     cacheTime: string
+    requestTimeout: string
     searchResultsLimit: number
     cache: {
         columns: string[]
