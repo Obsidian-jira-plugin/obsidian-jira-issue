@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     accounts: [],
     apiBasePath: '/rest/api/latest',
     cacheTime: '15m',
+    requestTimeout: '20s',
     searchResultsLimit: 10,
     cache: {
         columns: [],
@@ -898,6 +899,17 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 .setValue(SettingsData.cacheTime)
                 .onChange(async value => {
                     SettingsData.cacheTime = value
+                    await this.saveSettings()
+                }))
+
+        new Setting(containerEl)
+            .setName('Request timeout')
+            .setDesc('Time to wait for Jira to answer. After that the request counts as failed and the last data loaded successfully is shown instead. Increase it if large searches time out.')
+            .addText(text => text
+                .setPlaceholder('Example: 20s, 1m')
+                .setValue(SettingsData.requestTimeout)
+                .onChange(async value => {
+                    SettingsData.requestTimeout = value
                     await this.saveSettings()
                 }))
 

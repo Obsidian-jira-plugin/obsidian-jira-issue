@@ -1,6 +1,8 @@
+import moment from "moment"
 import { FrontMatterCache, TFile } from "obsidian"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
 import { EColorSchema, ERenderStyle, IJiraIssueAccountSettings } from "../interfaces/settingsInterfaces"
+import LastGoodCache from "../lastGoodCache"
 import { ObsidianApp } from "../main"
 import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
@@ -36,6 +38,11 @@ export const JIRA_STATUS_COLOR_MAP_BY_NAME: Record<string, string> = {
     'Testing': 'is-info',
     'Release Pending': 'is-success',
     'Closed': 'is-success'
+}
+
+export interface IStaleInfo {
+    updateTime: number
+    error: unknown
 }
 
 function resolveWebBaseUrl(account: IJiraIssueAccountSettings): string {
@@ -171,6 +178,36 @@ export default {
         createSpan({ cls: 'ji-tag is-danger is-light', text: issueKey, parent: tagsRow })
         createSpan({ cls: 'ji-tag is-danger', text: message, parent: tagsRow })
         return tagsRow
+    },
+
+    // Keep showing the last issue fetched successfully, flagged as stale, instead of the error
+    renderIssueFailure(issueKey: string, error: unknown, compact = false, cacheKey = issueKey): HTMLElement {
+        const lastGood = LastGoodCache.getIssue(cacheKey)
+        if (lastGood) {
+            try {
+                const tagsRow = this.renderIssue(lastGood.data, compact)
+                this.renderStaleMarker(tagsRow, 'this issue', { updateTime: lastGood.updateTime, error })
+                return tagsRow
+            } catch {
+                // A saved issue that cannot be rendered falls back to the error
+            }
+        }
+        return this.renderIssueError(issueKey, error as string)
+    },
+
+    formatUpdateTime(updateTime: number): string {
+        return moment(updateTime).format('llll')
+    },
+
+    renderStaleMarker(parent: HTMLElement, subject: string, stale: IStaleInfo): HTMLElement {
+        const reason = stale.error instanceof Error ? stale.error.message : String(stale.error)
+        const marker = createSpan({
+            cls: 'ji-tag is-warning ji-stale-marker',
+            text: '!',
+            attr: { 'aria-label': `Could not refresh ${subject}. Showing data from ${this.formatUpdateTime(stale.updateTime)}.\n\n${reason}` },
+        })
+        parent.prepend(marker)
+        return marker
     },
 
     renderAccountColorBand(account: IJiraIssueAccountSettings, parent: HTMLDivElement) {

@@ -2,7 +2,11 @@ jest.mock('escape-string-regexp', () => (s: string) => s)
 jest.mock('../src/main', () => ({
     ObsidianApp: { vault: { getConfig: jest.fn() } }
 }))
+jest.mock('../src/api/apiBase', () => ({ getIssue: jest.fn() }))
+jest.mock('../src/client/jiraClient', () => ({ __esModule: true, default: { getDevStatus: jest.fn() } }))
 
+import { getIssue } from '../src/api/apiBase'
+import JiraClient from '../src/client/jiraClient'
 import { renderTableColumn } from '../src/rendering/renderTableColumns'
 import { ESearchColumnsTypes, ISearchColumn } from '../src/interfaces/settingsInterfaces'
 import { IJiraIssue } from '../src/interfaces/issueInterfaces'
@@ -31,6 +35,11 @@ describe('renderTableColumns', () => {
             }
             return el
         }
+        ;(global as any).createSpan = (options: any = {}) => (global as any).createEl('span', options)
+    })
+
+    afterEach(() => {
+        jest.clearAllMocks()
     })
 
     test('renders EPIC NAME custom field column as a link from issue.fields.parent', async () => {
@@ -117,5 +126,52 @@ describe('renderTableColumns', () => {
         expect(cell.children[0].tagName).toEqual('a')
         expect(cell.children[0].text).toEqual('EPIC-99: Grandparent Epic')
         expect(cell.children[0].href).toEqual('https://test-company.atlassian.net/browse/EPIC-99')
+    })
+
+    describe('offline (saved results shown while Jira is unreachable)', () => {
+        const epicLinkIssue = (): IJiraIssue => ({
+            id: '10003',
+            key: 'TASK-3',
+            fields: {
+                summary: 'Task summary',
+                customfield_10014: 'EPIC-7',
+            } as any,
+            account: {
+                ...TestAccountOpen,
+                cache: {
+                    ...TestAccountOpen.cache,
+                    customFieldsNameToId: { 'EPIC LINK': '10014' }
+                }
+            }
+        })
+        const epicLinkColumns: ISearchColumn[] = [
+            { type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: 'EPIC LINK' }
+        ]
+
+        test('looks up the Epic summary when online', async () => {
+            ;(getIssue as jest.Mock).mockResolvedValueOnce({ fields: { summary: 'Epic summary' } })
+
+            const row = { cells: [] } as any
+            await renderTableColumn(epicLinkColumns, epicLinkIssue(), row)
+
+            expect(getIssue).toHaveBeenCalledTimes(1)
+            expect(row.cells[0].children[0].text).toEqual('EPIC-7: Epic summary')
+        })
+
+        test('shows the Epic key without looking it up', async () => {
+            const row = { cells: [] } as any
+            await renderTableColumn(epicLinkColumns, epicLinkIssue(), row, true)
+
+            expect(getIssue).not.toHaveBeenCalled()
+            expect(row.cells[0].children[0].text).toEqual('EPIC-7')
+        })
+
+        test('shows no dev status instead of fetching it', async () => {
+            const row = { cells: [] } as any
+            await renderTableColumn([{ type: ESearchColumnsTypes.DEV_STATUS, compact: false, extra: '' }], epicLinkIssue(), row, true)
+
+            expect(JiraClient.getDevStatus).not.toHaveBeenCalled()
+            expect(row.cells[0].children[0].textContent).toEqual('-')
+        })
     })
 })

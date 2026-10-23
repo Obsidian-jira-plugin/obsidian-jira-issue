@@ -1,7 +1,7 @@
 import * as obsidian from 'obsidian'
 import JiraClient from '../src/client/jiraClient'
 import { TestAccountOpen } from './testData'
-import { SettingsData } from '../src/settings'
+import { DEFAULT_SETTINGS, SettingsData } from '../src/settings'
 
 const kIssueKey = 'AAA-123'
 const requestUrlMock = jest.spyOn(obsidian, 'requestUrl')
@@ -261,6 +261,38 @@ describe('JiraClient', () => {
 
             await expect(JiraClient.testConnection(TestAccountOpen))
                 .rejects.toEqual(new Error('Jira API 200 Error: Login required'))
+        })
+
+        describe('request timeout', () => {
+            beforeEach(() => {
+                jest.useFakeTimers()
+                requestUrlMock.mockReturnValueOnce(new Promise(() => { }) as any)
+            })
+
+            afterEach(() => {
+                SettingsData.requestTimeout = DEFAULT_SETTINGS.requestTimeout
+                jest.useRealTimers()
+            })
+
+            test('getIssue fails when Jira does not answer in time', async () => {
+                SettingsData.requestTimeout = '5s'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 5 seconds')
+
+                await jest.advanceTimersByTimeAsync(5000)
+
+                await assertion
+            })
+
+            test('an invalid timeout falls back to the default', async () => {
+                SettingsData.requestTimeout = 'soon'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 20 seconds')
+
+                await jest.advanceTimersByTimeAsync(20000)
+
+                await assertion
+            })
         })
     })
 
