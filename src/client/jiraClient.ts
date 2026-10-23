@@ -1,7 +1,8 @@
+import ms from 'ms'
 import { Platform, requestUrl, RequestUrlParam, RequestUrlResponse } from 'obsidian'
 import { AVATAR_RESOLUTION, EAuthenticationTypes, IJiraIssueAccountSettings } from '../interfaces/settingsInterfaces'
 import { ESprintState, IJiraAutocompleteField, IJiraBoard, IJiraDevStatus, IJiraField, IJiraIssue, IJiraSearchResults, IJiraSprint, IJiraStatus, IJiraUser } from '../interfaces/issueInterfaces'
-import { SettingsData } from "../settings"
+import { DEFAULT_SETTINGS, SettingsData } from "../settings"
 import { JIRA_DEFAULT_ISSUE_ICON, JIRA_DEFAULT_PRIORITY_ICON, JIRA_ISSUE_TYPE_ICON_MAP, JIRA_PRIORITY_ICON_MAP } from '../rendering/jiraIcons'
 
 interface RequestOptions {
@@ -181,6 +182,31 @@ async function sendRequest(requestOptions: RequestOptions): Promise<any> {
     }
 }
 
+class RequestTimeoutError extends Error { }
+
+function getRequestTimeoutMs(): number {
+    const timeout = ms(SettingsData.requestTimeout || DEFAULT_SETTINGS.requestTimeout)
+    return timeout > 0 ? timeout : ms(DEFAULT_SETTINGS.requestTimeout)
+}
+
+// requestUrl has no timeout: a request sent on a connection that stopped working (e.g. right
+// after switching VPN) never settles, and the issue would stay on "Loading ..." forever
+function requestUrlWithTimeout(requestUrlParam: RequestUrlParam): Promise<RequestUrlResponse> {
+    const timeoutMs = getRequestTimeoutMs()
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new RequestTimeoutError(`Timeout: Jira did not answer within ${Math.round(timeoutMs / 1000)} seconds`))
+        }, timeoutMs)
+        Promise.resolve(requestUrl(requestUrlParam)).then(response => {
+            clearTimeout(timer)
+            resolve(response)
+        }, error => {
+            clearTimeout(timer)
+            reject(error)
+        })
+    })
+}
+
 async function sendRequestWithAccount(account: IJiraIssueAccountSettings, requestOptions: RequestOptions): Promise<RequestUrlResponse> {
     let response
     const requestUrlParam: RequestUrlParam = {
@@ -190,10 +216,13 @@ async function sendRequestWithAccount(account: IJiraIssueAccountSettings, reques
         contentType: 'application/json',
     }
     try {
-        response = await requestUrl(requestUrlParam)
+        response = await requestUrlWithTimeout(requestUrlParam)
         SettingsData.logRequestsResponses && console.info('JiraIssue:Fetch:', { request: requestUrlParam, response })
     } catch (errorResponse) {
         SettingsData.logRequestsResponses && console.warn('JiraIssue:Fetch:', { request: requestUrlParam, response: errorResponse })
+        if (errorResponse instanceof RequestTimeoutError) {
+            throw errorResponse
+        }
         response = errorResponse
     }
     return response
@@ -215,7 +244,7 @@ async function preFetchImage(account: IJiraIssueAccountSettings, url: string): P
     }
     let response: RequestUrlResponse
     try {
-        response = await requestUrl(options)
+        response = await requestUrlWithTimeout(options)
         SettingsData.logImagesFetch && console.info('JiraIssue:FetchImage:', { request: options, response })
     } catch (errorResponse) {
         SettingsData.logImagesFetch && console.warn('JiraIssue:FetchImage:', { request: options, response: errorResponse })
