@@ -55,6 +55,14 @@ The default value is `JIRA:`.
 
 If this field is kept empty, this feature will be disabled.
 
+## Copy column template
+
+This setting defines the text copied by the [`COPY_TO_CLIPBOARD`](/docs/components/jira-search#copy-to-clipboard) search column. The default value is `{prefix}{key}`, which copies the issue as an inline issue.
+
+The template can span multiple lines and supports these placeholders: `{prefix}`, `{key}`, `{summary}`, `{status}`, `{type}`, `{priority}`, `{assignee}`, `{reporter}`, `{project}`, `{labels}`, `{url}`. Unknown placeholders are copied unchanged.
+
+If this field is kept empty, the default value is used.
+
 ## Issue summary maximum width
 
 This setting limits the width of issue summaries in tags. The value is expressed in `rem` and defaults to `20`.

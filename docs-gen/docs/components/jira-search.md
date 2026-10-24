@@ -122,6 +122,22 @@ query: status = 'In Progress' order by priority DESC
 columns: key, notes, notes.title, notes.status, notes.tags, notes.tags[0], notes..book[?(@.price<30 && @.category=="fiction")]
 ```
 
+## Copy to clipboard
+The special column `COPY_TO_CLIPBOARD` adds a copy button to each row. By default it copies the issue as an [inline issue](inline-issue) (for example `JIRA:AAA-123`), ready to paste into any note.
+
+````
+```jira-search
+query: status = 'In Progress' order by priority DESC
+columns: copy_to_clipboard, key, summary, status
+```
+````
+
+The copied text can be changed in the settings with the `Copy column template` option. Available placeholders: `{prefix}` (the inline issue prefix), `{key}`, `{summary}`, `{status}`, `{type}`, `{priority}`, `{assignee}`, `{reporter}`, `{project}`, `{labels}`, `{url}`.
+
+Example: `- {prefix}{key} {summary}` copies `- JIRA:AAA-123 User story summary`.
+
+The template can span multiple lines, the line breaks are copied as well.
+
 ## Footer
 
 At the bottom of each search table you have several information:

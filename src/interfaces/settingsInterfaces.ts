@@ -53,6 +53,7 @@ export interface IJiraIssueSettings {
     colorSchema: EColorSchema
     inlineIssueUrlToTag: boolean
     inlineIssuePrefix: string
+    copyColumnTemplate: string
     issueSummaryMaxWidthRem: number
     issueStatusMaxWidthRem: number
     animateOverflowingText: boolean
@@ -144,6 +145,7 @@ export enum ESearchColumnsTypes {
 
     CUSTOM_FIELD = 'CUSTOM_FIELD',
     NOTES = 'NOTES',
+    COPY_TO_CLIPBOARD = 'COPY_TO_CLIPBOARD',
 }
 export const SEARCH_COLUMNS_DESCRIPTION = {
     [ESearchColumnsTypes.KEY]: 'Key',
@@ -179,6 +181,7 @@ export const SEARCH_COLUMNS_DESCRIPTION = {
 
     [ESearchColumnsTypes.CUSTOM_FIELD]: 'Custom field',
     [ESearchColumnsTypes.NOTES]: 'Notes',
+    [ESearchColumnsTypes.COPY_TO_CLIPBOARD]: 'Copy',
 }
 
 export interface ISearchColumn {

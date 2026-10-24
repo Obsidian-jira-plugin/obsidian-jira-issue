@@ -28,6 +28,7 @@ const StoredSettings = {
     cacheTime: 'cacheTimeVal',
     colorSchema: EColorSchema.LIGHT,
     inlineIssuePrefix: 'inlineIssuePrefixVal',
+    copyColumnTemplate: 'copyColumnTemplateVal',
     inlineIssueUrlToTag: true,
     logImagesFetch: false,
     logRequestsResponses: true,
