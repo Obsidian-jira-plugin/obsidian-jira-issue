@@ -1,14 +1,26 @@
 import { MarkdownPostProcessorContext, setIcon } from "obsidian"
-import { toDefaultedIssue, IJiraSearchResults } from "../interfaces/issueInterfaces"
+import { toDefaultedIssue, IJiraIssue, IJiraSearchResults } from "../interfaces/issueInterfaces"
 import JiraClient from "../client/jiraClient"
-import LastGoodCache from "../lastGoodCache"
+import LastGoodCache, { trimIssueForChip } from "../lastGoodCache"
 import ObjectsCache from "../objectsCache"
-import { renderTableColumn } from "./renderTableColumns"
+import { renderTableColumn, trimIssueForColumns } from "./renderTableColumns"
 import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
 import RC, { IStaleInfo } from "./renderingCommon"
-import { ESearchColumnsTypes, ESearchResultsRenderingTypes, IJiraIssueAccountSettings, SEARCH_COLUMNS_DESCRIPTION } from "../interfaces/settingsInterfaces"
+import { ESearchColumnsTypes, ESearchResultsRenderingTypes, IJiraIssueAccountSettings, ISearchColumn, SEARCH_COLUMNS_DESCRIPTION } from "../interfaces/settingsInterfaces"
 
+function getColumns(searchView: SearchView): ISearchColumn[] {
+    return searchView.columns.length > 0 ? searchView.columns : SettingsData.searchColumns
+}
+
+// Only what this view renders is saved: a list shows chips, a table shows its columns
+function getIssueTrimmer(searchView: SearchView): (issue: IJiraIssue) => IJiraIssue {
+    if (searchView.type === ESearchResultsRenderingTypes.LIST) {
+        return trimIssueForChip
+    }
+    const columns = getColumns(searchView)
+    return issue => trimIssueForColumns(issue, columns)
+}
 
 async function renderSearchResults(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults, stale: IStaleInfo = null): Promise<void> {
     searchView.account = searchResults.account
@@ -48,7 +60,7 @@ function renderSearchResultsTableHeader(table: HTMLElement, searchView: SearchVi
         parent:
             createEl('thead', { attr: { style: getAccountBandStyle(searchView.account) }, parent: table })
     })
-    const columns = searchView.columns.length > 0 ? searchView.columns : SettingsData.searchColumns
+    const columns = getColumns(searchView)
     for (const column of columns) {
         let name = SEARCH_COLUMNS_DESCRIPTION[column.type]
         // Frontmatter
@@ -76,7 +88,7 @@ async function renderSearchResultsTableBody(table: HTMLElement, searchView: Sear
     for (let issue of searchResults.issues) {
         issue = toDefaultedIssue(issue)
         const row = createEl('tr', { parent: tbody })
-        const columns = searchView.columns.length > 0 ? searchView.columns : SettingsData.searchColumns
+        const columns = getColumns(searchView)
         await renderTableColumn(columns, issue, row, offline)
     }
 }
@@ -144,12 +156,13 @@ async function renderSearchView(rootEl: HTMLElement, searchView: SearchView): Pr
     } else {
         // console.log(`Search results not available in the cache`)
         RC.renderLoadingItem('Loading...')
+        const generation = LastGoodCache.generation()
         JiraClient.getSearchResults(searchView.query, { limit: searchView.limit || SettingsData.searchResultsLimit, account: searchView.account })
             .then(async newSearchResults => {
                 searchView.account = newSearchResults.account
                 const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
                 await renderSearchResults(rootEl, searchView, searchResults)
-                LastGoodCache.rememberSearch(searchView.getCacheKey(), searchResults)
+                LastGoodCache.rememberSearch(searchView.getCacheKey(), searchResults, getIssueTrimmer(searchView), generation)
             }).catch(err => {
                 ObjectsCache.add(searchView.getCacheKey(), err, true)
                 return renderSearchFailure(rootEl, searchView, err)

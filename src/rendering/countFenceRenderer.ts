@@ -45,10 +45,11 @@ export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: M
         }
     } else {
         RC.renderLoadingItem('Loading...')
+        const generation = LastGoodCache.generation()
         JiraClient.getSearchResults(searchView.query, { limit: 1 }).then(newSearchResults => {
             const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
             renderSearchCount(el, searchResults, searchView)
-            LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults)
+            LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults, generation)
         }).catch(err => {
             ObjectsCache.add(searchView.getCacheKey(), err, true)
             renderSearchCountFailure(el, searchView, err)

@@ -55,10 +55,11 @@ export const IssueFenceRenderer = async (source: string, el: HTMLElement, ctx: M
             } else {
                 // console.log(`Issue not available in the cache`)
                 renderedItems[issueKey] = RC.renderLoadingItem(issueKey)
+                const generation = LastGoodCache.generation()
                 JiraClient.getIssue(issueKey).then(newIssue => {
                     const issue = ObjectsCache.add(issueKey, newIssue).data as IJiraIssue
                     renderedItems[issueKey] = RC.renderIssue(issue)
-                    LastGoodCache.rememberIssue(issueKey, issue)
+                    LastGoodCache.rememberIssue(issueKey, issue, generation)
                     updateRenderedIssues(el, renderedItems)
                 }).catch(err => {
                     ObjectsCache.add(issueKey, err, true)
