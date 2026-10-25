@@ -127,10 +127,12 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                 ? ECredentialStorageType.KEYCHAIN
                 : ECredentialStorageType.PLAINTEXT
         }
+        let generatedAccountIds = false
         for (let i = 0; i < SettingsData.accounts.length; i++) {
             SettingsData.accounts[i] = Object.assign({}, DEFAULT_ACCOUNT, SettingsData.accounts[i])
             if (!SettingsData.accounts[i].id) {
                 SettingsData.accounts[i].id = generateAccountId()
+                generatedAccountIds = true
             }
         }
         SettingsData.cache = deepCopy(DEFAULT_SETTINGS.cache)
@@ -197,6 +199,12 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         }
 
         this.accountsConflictsFix()
+
+        // Saved issues refer to their account by id, so a generated id must stay the same on the
+        // next load. Saved last, once the secrets are loaded, so they are not overwritten with empty values
+        if (generatedAccountIds) {
+            await this.saveSettings()
+        }
     }
 
     private async decryptAccountsWithPassphrase(passphrase: string) {
@@ -904,7 +912,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Request timeout')
-            .setDesc('Time to wait for Jira to answer. After that the request counts as failed and the last data loaded successfully is shown instead. Increase it if large searches time out.')
+            .setDesc('Time to wait for Jira to answer. After that the request counts as failed and the last data loaded successfully is shown instead. A number without unit means seconds, the minimum is 1s. Increase it if large searches time out.')
             .addText(text => text
                 .setPlaceholder('Example: 20s, 1m')
                 .setValue(SettingsData.requestTimeout)

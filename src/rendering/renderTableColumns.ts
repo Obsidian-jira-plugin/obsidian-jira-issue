@@ -37,6 +37,69 @@ function deltaToStr(delta: number): string {
     return ''
 }
 
+// Issue fields each column renders, keep in sync with renderTableColumn. KEY, NOTES and
+// DEV_STATUS only need the issue key and id; people and custom fields are handled below
+const COLUMN_FIELDS: Partial<Record<ESearchColumnsTypes, string[]>> = {
+    [ESearchColumnsTypes.SUMMARY]: ['summary'],
+    [ESearchColumnsTypes.DESCRIPTION]: ['description'],
+    [ESearchColumnsTypes.TYPE]: ['issuetype'],
+    [ESearchColumnsTypes.CREATED]: ['created'],
+    [ESearchColumnsTypes.UPDATED]: ['updated'],
+    [ESearchColumnsTypes.PRIORITY]: ['priority'],
+    [ESearchColumnsTypes.STATUS]: ['status'],
+    [ESearchColumnsTypes.DUE_DATE]: ['duedate'],
+    [ESearchColumnsTypes.RESOLUTION]: ['resolution'],
+    [ESearchColumnsTypes.RESOLUTION_DATE]: ['resolutiondate'],
+    [ESearchColumnsTypes.PROJECT]: ['project'],
+    [ESearchColumnsTypes.ENVIRONMENT]: ['environment'],
+    [ESearchColumnsTypes.AGGREGATE_PROGRESS]: ['aggregateprogress'],
+    [ESearchColumnsTypes.AGGREGATE_TIME_ESTIMATED]: ['aggregatetimeestimate'],
+    [ESearchColumnsTypes.AGGREGATE_TIME_ORIGINAL_ESTIMATE]: ['aggregatetimeoriginalestimate'],
+    [ESearchColumnsTypes.AGGREGATE_TIME_SPENT]: ['aggregatetimespent'],
+    [ESearchColumnsTypes.FIX_VERSIONS]: ['fixVersions'],
+    [ESearchColumnsTypes.LABELS]: ['labels'],
+    [ESearchColumnsTypes.COMPONENTS]: ['components'],
+    [ESearchColumnsTypes.LAST_VIEWED]: ['lastViewed'],
+    [ESearchColumnsTypes.PROGRESS]: ['progress'],
+    [ESearchColumnsTypes.TIME_ESTIMATE]: ['timeestimate'],
+    [ESearchColumnsTypes.TIME_ORIGINAL_ESTIMATE]: ['timeoriginalestimate'],
+    [ESearchColumnsTypes.TIME_SPENT]: ['timespent'],
+}
+
+const PEOPLE_COLUMN_FIELDS: Partial<Record<ESearchColumnsTypes, string>> = {
+    [ESearchColumnsTypes.REPORTER]: 'reporter',
+    [ESearchColumnsTypes.ASSIGNEE]: 'assignee',
+}
+
+// Saved search results end up in the vault: keep only what the columns render. People keep
+// their name only (no email, account id or avatar), so compact columns show the name offline
+export function trimIssueForColumns(issue: IJiraIssue, columns: ISearchColumn[]): IJiraIssue {
+    const fields: Record<string, unknown> = {}
+    const keep = (field: string) => {
+        if (issue.fields[field] !== undefined) {
+            fields[field] = issue.fields[field]
+        }
+    }
+    for (const column of columns) {
+        const personField = PEOPLE_COLUMN_FIELDS[column.type]
+        if (personField) {
+            fields[personField] = issue.fields[personField] && { displayName: issue.fields[personField].displayName }
+        } else if (column.type === ESearchColumnsTypes.CUSTOM_FIELD) {
+            const customFieldColumn = resolveCustomFieldColumn(issue, column.extra)
+            if (customFieldColumn.kind === 'EPIC') {
+                ['epic', 'parent', 'issuetype', `customfield_${getEpicLinkFieldId(issue)}`].forEach(keep)
+            } else if (customFieldColumn.kind === 'PARENT') {
+                keep('parent')
+            } else {
+                keep(customFieldColumn.field)
+            }
+        } else {
+            (COLUMN_FIELDS[column.type] || []).forEach(keep)
+        }
+    }
+    return { id: issue.id, key: issue.key, fields, account: null } as IJiraIssue
+}
+
 // offline: the issue comes from the saved results shown while Jira is unreachable, so columns
 // that need more data from Jira only use what is already in memory
 export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement, offline = false): Promise<void> => {
@@ -369,14 +432,17 @@ async function lookupIssue(issueKey: string, issue: IJiraIssue, offline: boolean
     return getIssue(issueKey, { fields: ['*all'], account: issue.account })
 }
 
+function getEpicLinkFieldId(issue: IJiraIssue): string {
+    return issue.account?.cache?.customFieldsNameToId?.['EPIC LINK'] || issue.account?.cache?.customFieldsNameToId?.['Epic Link']
+}
+
 async function resolveEpic(issue: IJiraIssue, depth = 0, offline = false): Promise<{ key?: string; summary?: string; isParentFallback?: boolean } | null> {
     if (!issue || !issue.fields || depth > 3) {
         return null
     }
 
     // 1. Check legacy Jira Server/Data Center customfield by ID if mapped
-    const customEpicFieldId = issue.account?.cache?.customFieldsNameToId['EPIC LINK'] || 
-                              issue.account?.cache?.customFieldsNameToId['Epic Link']
+    const customEpicFieldId = getEpicLinkFieldId(issue)
     if (customEpicFieldId && customEpicFieldId !== 'VIRTUAL_EPIC_NAME' && issue.fields[`customfield_${customEpicFieldId}`]) {
         const epicVal = issue.fields[`customfield_${customEpicFieldId}`]
         if (typeof epicVal === 'string') {
@@ -461,16 +527,28 @@ export const VIRTUAL_EPIC_ALIASES = ['EPIC', 'EPIC LINK', 'EPIC NAME', 'EPIC_LIN
 export const VIRTUAL_PARENT_ALIASES = ['PARENT', 'PARENT LINK', 'PARENT NAME', 'PARENT_LINK', 'PARENT_NAME']
 export const VIRTUAL_CUSTOM_FIELD_ALIASES = [...VIRTUAL_EPIC_ALIASES, ...VIRTUAL_PARENT_ALIASES]
 
-async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement, offline: boolean): Promise<void> {
-    const rawField = customField
-    if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
-        customField = issue.account.cache.customFieldsNameToId[customField] || customField
-    }
+type CustomFieldColumn = { kind: 'EPIC' } | { kind: 'PARENT' } | { kind: 'FIELD', field: string }
 
-    const fieldUpper = rawField.toUpperCase()
+function resolveCustomFieldColumn(issue: IJiraIssue, customField: string): CustomFieldColumn {
+    let fieldId = customField
+    if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
+        fieldId = issue.account.cache.customFieldsNameToId[customField] || customField
+    }
+    const fieldUpper = customField.toUpperCase()
+    if (fieldId === 'VIRTUAL_EPIC_NAME' || VIRTUAL_EPIC_ALIASES.includes(fieldUpper)) {
+        return { kind: 'EPIC' }
+    }
+    if (fieldId === 'VIRTUAL_PARENT' || VIRTUAL_PARENT_ALIASES.includes(fieldUpper)) {
+        return { kind: 'PARENT' }
+    }
+    return { kind: 'FIELD', field: `customfield_${fieldId}` }
+}
+
+async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement, offline: boolean): Promise<void> {
+    const customFieldColumn = resolveCustomFieldColumn(issue, customField)
 
     // 1. Epic Link / Epic Name virtual column
-    if (customField === 'VIRTUAL_EPIC_NAME' || VIRTUAL_EPIC_ALIASES.includes(fieldUpper)) {
+    if (customFieldColumn.kind === 'EPIC') {
         const epic = await resolveEpic(issue, 0, offline)
         if (epic && (epic.key || epic.summary)) {
             const epicKey = epic.key
@@ -508,7 +586,7 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
     }
 
     // 2. Parent / Parent Link virtual column (immediate parent task/story)
-    if (customField === 'VIRTUAL_PARENT' || VIRTUAL_PARENT_ALIASES.includes(fieldUpper)) {
+    if (customFieldColumn.kind === 'PARENT') {
         if (issue.fields?.parent) {
             const parentKey = issue.fields.parent.key
             const parentSummary = issue.fields.parent.fields?.summary
@@ -533,7 +611,7 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
         cell.setText('')
         return
     }
-    const value = issue.fields[`customfield_${customField}`]
+    const value = issue.fields[customFieldColumn.field]
     if (value === undefined || value === null) {
         cell.setText('')
         return

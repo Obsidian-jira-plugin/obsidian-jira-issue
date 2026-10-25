@@ -184,9 +184,16 @@ async function sendRequest(requestOptions: RequestOptions): Promise<any> {
 
 class RequestTimeoutError extends Error { }
 
+const MIN_REQUEST_TIMEOUT_MS = 1000
+
 function getRequestTimeoutMs(): number {
-    const timeout = ms(SettingsData.requestTimeout || DEFAULT_SETTINGS.requestTimeout)
-    return timeout > 0 ? timeout : ms(DEFAULT_SETTINGS.requestTimeout)
+    const value = (SettingsData.requestTimeout || '').trim() || DEFAULT_SETTINGS.requestTimeout
+    // ms() reads a plain number as milliseconds, but "30" here means 30 seconds
+    const timeout = /^\d+(\.\d+)?$/.test(value) ? Number(value) * 1000 : ms(value)
+    if (!(timeout > 0)) {
+        return ms(DEFAULT_SETTINGS.requestTimeout)
+    }
+    return Math.max(timeout, MIN_REQUEST_TIMEOUT_MS)
 }
 
 // requestUrl has no timeout: a request sent on a connection that stopped working (e.g. right
@@ -195,7 +202,7 @@ function requestUrlWithTimeout(requestUrlParam: RequestUrlParam): Promise<Reques
     const timeoutMs = getRequestTimeoutMs()
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
-            reject(new RequestTimeoutError(`Timeout: Jira did not answer within ${Math.round(timeoutMs / 1000)} seconds`))
+            reject(new RequestTimeoutError(`Timeout: Jira did not answer within ${ms(timeoutMs, { long: true })}`))
         }, timeoutMs)
         Promise.resolve(requestUrl(requestUrlParam)).then(response => {
             clearTimeout(timer)

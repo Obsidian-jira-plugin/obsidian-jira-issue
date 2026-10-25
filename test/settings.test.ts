@@ -74,7 +74,9 @@ describe('Settings', () => {
         pluginMock.loadData.mockReturnValueOnce(deepCopy(StoredSettings))
         await settingTab.loadSettings()
         expect(pluginMock.loadData).toBeCalledTimes(1)
-        expect(pluginMock.saveData).toBeCalledTimes(0)
+        // The stored account has no id yet: the generated one is saved so it stays the same
+        expect(pluginMock.saveData).toBeCalledTimes(1)
+        expect(pluginMock.saveData.mock.calls[0][0].accounts[0].id).toEqual(SettingsData.accounts[0].id)
         expect(SettingsData).toEqual({
             ...StoredSettings,
             credentialStorageType: ECredentialStorageType.PLAINTEXT,

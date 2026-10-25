@@ -26,7 +26,14 @@ Examples
 ## Request timeout
 How long the plugin waits for Jira to answer a request. After that the request counts as failed, and issues, searches and counts show the last data loaded successfully, marked with a `!`. Without a timeout, a request sent on a connection that stopped working (for example right after switching VPN) could stay on "Loading ..." forever.
 
-The default value is `20s`. It uses the same syntax as the cache time. Increase it if large searches on a slow Jira server time out.
+The default value is `20s`. It uses the same syntax as the cache time, except that a number without unit means seconds. Values under 1 second are raised to 1 second. Increase it if large searches on a slow Jira server time out.
+
+## Saved issue data
+To keep showing issues, searches and counts when Jira can't be reached, the plugin saves the last data it loaded successfully in `issues-cache.json`, in the plugin folder of your vault.
+
+This file contains Jira data: issue keys, summaries and statuses, and for search tables the fields shown by their columns (for example descriptions, if the table has a description column). People are saved by display name only. Since the file is part of the vault, it is synced and backed up together with it.
+
+Entries that could not be refreshed for 30 days are dropped, the file keeps at most 500 entries, and entries of removed accounts are dropped too. The `Clear cache` command empties the file.
 
 ## Debug mode
 In order to help users debug authentication issues and provide useful information when submitting new Issues on GitHub, the plugin provides a way to increase the debug information in the Obsidian.md console.

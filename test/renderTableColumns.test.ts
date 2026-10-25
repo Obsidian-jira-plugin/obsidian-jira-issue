@@ -7,9 +7,9 @@ jest.mock('../src/client/jiraClient', () => ({ __esModule: true, default: { getD
 
 import { getIssue } from '../src/api/apiBase'
 import JiraClient from '../src/client/jiraClient'
-import { renderTableColumn } from '../src/rendering/renderTableColumns'
+import { renderTableColumn, trimIssueForColumns } from '../src/rendering/renderTableColumns'
 import { ESearchColumnsTypes, ISearchColumn } from '../src/interfaces/settingsInterfaces'
-import { IJiraIssue } from '../src/interfaces/issueInterfaces'
+import { IJiraIssue, toDefaultedIssue } from '../src/interfaces/issueInterfaces'
 import { TestAccountOpen } from './testData'
 
 describe('renderTableColumns', () => {
@@ -166,12 +166,72 @@ describe('renderTableColumns', () => {
             expect(row.cells[0].children[0].text).toEqual('EPIC-7')
         })
 
+        test('shows the assignee name from trimmed results in a compact column', async () => {
+            const columns: ISearchColumn[] = [{ type: ESearchColumnsTypes.ASSIGNEE, compact: true, extra: '' }]
+            const issue = trimIssueForColumns({
+                ...epicLinkIssue(),
+                fields: { assignee: { displayName: 'Jane Doe', emailAddress: 'jane@example.com', avatarUrls: { '16x16': 'data:image/png;base64,AAAA' } } } as any,
+            }, columns)
+
+            const row = { cells: [] } as any
+            await renderTableColumn(columns, toDefaultedIssue({ ...issue, account: TestAccountOpen }), row, true)
+
+            expect(row.cells[0].textContent).toEqual('Jane Doe')
+        })
+
         test('shows no dev status instead of fetching it', async () => {
             const row = { cells: [] } as any
             await renderTableColumn([{ type: ESearchColumnsTypes.DEV_STATUS, compact: false, extra: '' }], epicLinkIssue(), row, true)
 
             expect(JiraClient.getDevStatus).not.toHaveBeenCalled()
             expect(row.cells[0].children[0].textContent).toEqual('-')
+        })
+    })
+
+    describe('trimIssueForColumns', () => {
+        test('keeps only the fields the columns render, and people by name only', () => {
+            const parent = { key: 'EPIC-1', fields: { summary: 'Epic summary' } }
+            const issue = {
+                id: '10004',
+                key: 'TASK-4',
+                account: {
+                    ...TestAccountOpen,
+                    cache: { ...TestAccountOpen.cache, customFieldsNameToId: { 'EPIC LINK': '10014', 'Story Points': '10016' } },
+                },
+                fields: {
+                    summary: 'Task summary',
+                    description: 'Not shown by any column',
+                    status: { name: 'Done', statusCategory: { colorName: 'green' } },
+                    reporter: { displayName: 'Jane Doe', emailAddress: 'jane@example.com', accountId: '712020:abc', avatarUrls: { '16x16': 'data:image/png;base64,AAAA' } },
+                    comment: { comments: [{ body: 'Not shown either' }] },
+                    parent,
+                    customfield_10014: 'EPIC-7',
+                    customfield_10016: 5,
+                    customfield_10099: 'Unused custom field',
+                },
+            } as any
+            const columns: ISearchColumn[] = [
+                { type: ESearchColumnsTypes.KEY, compact: false, extra: '' },
+                { type: ESearchColumnsTypes.SUMMARY, compact: false, extra: '' },
+                { type: ESearchColumnsTypes.STATUS, compact: false, extra: '' },
+                { type: ESearchColumnsTypes.REPORTER, compact: true, extra: '' },
+                { type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: 'EPIC LINK' },
+                { type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: 'Story Points' },
+            ]
+
+            expect(trimIssueForColumns(issue, columns)).toEqual({
+                id: '10004',
+                key: 'TASK-4',
+                account: null,
+                fields: {
+                    summary: 'Task summary',
+                    status: { name: 'Done', statusCategory: { colorName: 'green' } },
+                    reporter: { displayName: 'Jane Doe' },
+                    parent,
+                    customfield_10014: 'EPIC-7',
+                    customfield_10016: 5,
+                },
+            })
         })
     })
 })

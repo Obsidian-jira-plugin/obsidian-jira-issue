@@ -5,18 +5,20 @@ import { SettingsData } from "./settings"
 
 // Last successfully fetched issues, searches and counts, persisted to disk so a failed refresh
 // (connection lost, VPN off, proxy returning 403...) can keep showing the previous content,
-// even right after a restart. Unlike ObjectsCache, entries never expire and survive settings
-// changes: only the "Clear cache" command empties the store.
+// even right after a restart. The file lives in the vault, so it only keeps the fields that
+// are rendered. Unlike ObjectsCache, entries survive settings changes; they are dropped after
+// MAX_AGE_MS without a successful refresh, beyond MAX_ENTRIES, when their account is removed,
+// or by the "Clear cache" command.
 
-const FILE_VERSION = 1
+const FILE_VERSION = 2
 const SAVE_DELAY_MS = 2000
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+const MAX_ENTRIES = 500
 
 interface StoredEntry {
     updateTime: number
     // The account is stored by reference only: the settings object holds the credentials
     accountId: string
-    accountAlias: string
-    accountHost: string
     data: unknown
 }
 
@@ -35,18 +37,14 @@ let adapter: DataAdapter = null
 let filePath: string = null
 let saveTimer: ReturnType<typeof setTimeout> = null
 let writeQueue: Promise<void> = Promise.resolve()
+let generation = 0
 
-// Account ids are not always persisted, so fall back to the alias, but only on the same host:
-// a new account reusing an old alias must not inherit the old account's issues
 function findAccount(entry: StoredEntry): IJiraIssueAccountSettings {
-    const alias = (entry.accountAlias || '').toUpperCase()
-    return SettingsData.accounts.find(account => entry.accountId && account.id === entry.accountId)
-        || SettingsData.accounts.find(account => account.host === entry.accountHost && account.alias.toUpperCase() === alias)
-        || null
+    return SettingsData.accounts.find(account => entry.accountId && account.id === entry.accountId) || null
 }
 
-// Chips only render these fields, the rest of an issue fetched with *all fields is not worth storing
-function trimIssueForChip(issue: IJiraIssue): IJiraIssue {
+// Chips only render these fields, the rest of an issue fetched with *all fields must not be stored
+export function trimIssueForChip(issue: IJiraIssue): IJiraIssue {
     const { issuetype, status, summary } = issue.fields
     return {
         id: issue.id,
@@ -64,15 +62,27 @@ function trimIssueForChip(issue: IJiraIssue): IJiraIssue {
     } as IJiraIssue
 }
 
-function put(key: string, account: IJiraIssueAccountSettings, data: unknown): void {
-    if (!account) {
+function prune(): void {
+    const oldestKept = Date.now() - MAX_AGE_MS
+    const kept = Object.keys(entries)
+        .filter(key => entries[key].updateTime > oldestKept && findAccount(entries[key]))
+        .sort((a, b) => entries[b].updateTime - entries[a].updateTime)
+        .slice(0, MAX_ENTRIES)
+    const prunedEntries: Record<string, StoredEntry> = {}
+    for (const key of kept) {
+        prunedEntries[key] = entries[key]
+    }
+    entries = prunedEntries
+}
+
+function put(key: string, account: IJiraIssueAccountSettings, data: unknown, fetchGeneration: number): void {
+    // Fetched before the last "Clear cache": the user asked for this data to be gone
+    if (fetchGeneration !== generation || !account || !account.id) {
         return
     }
     entries[key] = {
         updateTime: Date.now(),
-        accountId: account.id || null,
-        accountAlias: account.alias,
-        accountHost: account.host,
+        accountId: account.id,
         data: data,
     }
     scheduleSave()
@@ -108,6 +118,7 @@ function save(): Promise<void> {
     if (!adapter) {
         return writeQueue
     }
+    prune()
     const file: StoredFile = { version: FILE_VERSION, entries: entries }
     const content = JSON.stringify(file)
     writeQueue = writeQueue.then(() => writeFile(content))
@@ -150,6 +161,7 @@ export default {
         filePath = path
         // Mid-swap the cache file can be missing while the temporary file is complete
         entries = (await readEntries(filePath)) || (await readEntries(`${filePath}.tmp`)) || {}
+        prune()
     },
 
     async flush(): Promise<void> {
@@ -163,6 +175,7 @@ export default {
 
     async clear(): Promise<void> {
         entries = {}
+        generation++
         if (saveTimer) {
             clearTimeout(saveTimer)
             saveTimer = null
@@ -170,21 +183,29 @@ export default {
         await save()
     },
 
+    // Taken before a fetch starts and given back to remember*(): results of fetches started
+    // before a "Clear cache" are not stored
+    generation(): number {
+        return generation
+    },
+
     // Same key as ObjectsCache: the issue key, or the issue URL when the chip is tied to one Jira host
-    rememberIssue(cacheKey: string, issue: IJiraIssue): void {
-        put(`issue:${cacheKey}`, issue.account, trimIssueForChip(issue))
+    rememberIssue(cacheKey: string, issue: IJiraIssue, fetchGeneration: number): void {
+        put(`issue:${cacheKey}`, issue.account, trimIssueForChip(issue), fetchGeneration)
     },
 
     getIssue(cacheKey: string): LastGoodItem<IJiraIssue> {
         return take<IJiraIssue>(`issue:${cacheKey}`, (issue, account) => ({ ...issue, account }))
     },
 
-    rememberSearch(cacheKey: string, searchResults: IJiraSearchResults): void {
+    // trimIssue keeps the fields the search view renders (chip fields for a list, column fields for a table)
+    rememberSearch(cacheKey: string, searchResults: IJiraSearchResults, trimIssue: (issue: IJiraIssue) => IJiraIssue, fetchGeneration: number): void {
         put(`search:${cacheKey}`, searchResults.account, {
-            ...searchResults,
+            issues: searchResults.issues.map(issue => ({ ...trimIssue(issue), account: null })),
+            total: searchResults.total,
+            isLast: searchResults.isLast,
             account: null,
-            issues: searchResults.issues.map(issue => ({ ...issue, account: null })),
-        })
+        }, fetchGeneration)
     },
 
     getSearch(cacheKey: string): LastGoodItem<IJiraSearchResults> {
@@ -195,8 +216,8 @@ export default {
         }))
     },
 
-    rememberCount(cacheKey: string, searchResults: IJiraSearchResults): void {
-        put(`count:${cacheKey}`, searchResults.account, { issues: [], total: searchResults.total, account: null })
+    rememberCount(cacheKey: string, searchResults: IJiraSearchResults, fetchGeneration: number): void {
+        put(`count:${cacheKey}`, searchResults.account, { issues: [], total: searchResults.total, account: null }, fetchGeneration)
     },
 
     getCount(cacheKey: string): LastGoodItem<IJiraSearchResults> {

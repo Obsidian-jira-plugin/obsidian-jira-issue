@@ -284,6 +284,26 @@ describe('JiraClient', () => {
                 await assertion
             })
 
+            test('a number without unit means seconds', async () => {
+                SettingsData.requestTimeout = '30'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 30 seconds')
+
+                await jest.advanceTimersByTimeAsync(30000)
+
+                await assertion
+            })
+
+            test('a timeout under 1 second is raised to 1 second', async () => {
+                SettingsData.requestTimeout = '10ms'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 1 second')
+
+                await jest.advanceTimersByTimeAsync(1000)
+
+                await assertion
+            })
+
             test('an invalid timeout falls back to the default', async () => {
                 SettingsData.requestTimeout = 'soon'
                 const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
