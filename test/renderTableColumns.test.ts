@@ -125,6 +125,30 @@ describe('renderTableColumns', () => {
         expect(cell.children[0].href).toEqual('https://test-company.atlassian.net/browse/EPIC-99')
     })
 
+    test.each([
+        ['an array of users', [{ accountId: 'a1', displayName: 'Jane Doe' }, { accountId: 'a2', displayName: 'John Roe' }], 'Jane Doe, John Roe'],
+        ['a single user', { accountId: 'a1', displayName: 'Jane Doe' }, 'Jane Doe'],
+        ['a select option', { id: '1', value: 'High' }, 'High'],
+        ['an array of options', [{ value: 'A' }, { value: 'B' }], 'A, B'],
+        ['an unknown object', { foo: 'bar' }, '{"foo":"bar"}'],
+    ])('renders a custom field holding %s as readable text', async (_label, fieldValue, expected) => {
+        const columns: ISearchColumn[] = [
+            { type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: '10524' }
+        ]
+        const mockIssue = {
+            id: '10001',
+            key: 'TASK-1',
+            fields: { summary: 'Task summary', customfield_10524: fieldValue } as any,
+            account: TestAccountOpen,
+        } as IJiraIssue
+
+        const row = { cells: [] } as any
+        await renderTableColumn(columns, mockIssue, row)
+
+        expect(row.cells.length).toEqual(1)
+        expect(row.cells[0].textContent).toEqual(expected)
+    })
+
     test('formatCopyTemplate fills placeholders and keeps unknown ones', () => {
         SettingsData.inlineIssuePrefix = 'JIRA:'
         const issue = {

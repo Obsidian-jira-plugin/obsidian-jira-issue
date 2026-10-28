@@ -571,5 +571,10 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
         cell.setText(value.toString())
         return
     }
-    cell.setText(JSON.stringify(value))
+    const formatValue = (v: any): string => {
+        if (v === undefined || v === null) return ''
+        if (typeof v !== 'object') return String(v)
+        return v.displayName ?? v.name ?? v.value ?? v.key ?? JSON.stringify(v)
+    }
+    cell.setText(Array.isArray(value) ? value.map(formatValue).join(', ') : formatValue(value))
 }
