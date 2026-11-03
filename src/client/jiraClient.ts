@@ -3,7 +3,7 @@ import { Platform, requestUrl, RequestUrlParam, RequestUrlResponse } from 'obsid
 import { AVATAR_RESOLUTION, EAuthenticationTypes, IJiraIssueAccountSettings } from '../interfaces/settingsInterfaces'
 import { ESprintState, IJiraAutocompleteField, IJiraBoard, IJiraDevStatus, IJiraField, IJiraIssue, IJiraSearchResults, IJiraSprint, IJiraStatus, IJiraUser } from '../interfaces/issueInterfaces'
 import { DEFAULT_SETTINGS, SettingsData } from "../settings"
-import { JIRA_DEFAULT_ISSUE_ICON, JIRA_DEFAULT_PRIORITY_ICON, JIRA_ISSUE_TYPE_ICON_MAP, JIRA_PRIORITY_ICON_MAP } from '../rendering/jiraIcons'
+import { getIssueTypeIconUrl, getPriorityIconUrl } from '../rendering/jiraIcons'
 
 interface RequestOptions {
     method: string
@@ -185,6 +185,8 @@ async function sendRequest(requestOptions: RequestOptions): Promise<any> {
 class RequestTimeoutError extends Error { }
 
 const MIN_REQUEST_TIMEOUT_MS = 1000
+// setTimeout fires right away for longer delays (about 24.8 days)
+const MAX_REQUEST_TIMEOUT_MS = 2 ** 31 - 1
 
 function getRequestTimeoutMs(): number {
     const value = (SettingsData.requestTimeout || '').trim() || DEFAULT_SETTINGS.requestTimeout
@@ -193,7 +195,7 @@ function getRequestTimeoutMs(): number {
     if (!(timeout > 0)) {
         return ms(DEFAULT_SETTINGS.requestTimeout)
     }
-    return Math.max(timeout, MIN_REQUEST_TIMEOUT_MS)
+    return Math.min(Math.max(timeout, MIN_REQUEST_TIMEOUT_MS), MAX_REQUEST_TIMEOUT_MS)
 }
 
 // requestUrl has no timeout: a request sent on a connection that stopped working (e.g. right
@@ -272,8 +274,7 @@ async function fetchIssueImages(issue: IJiraIssue) {
     if (issue.fields) {
         if (issue.fields.issuetype && issue.fields.issuetype.iconUrl) {
             if (disableImages) {
-                const typeName = (issue.fields.issuetype.name || '').toLowerCase()
-                issue.fields.issuetype.iconUrl = JIRA_ISSUE_TYPE_ICON_MAP[typeName] || (typeName.startsWith("sub-") && JIRA_ISSUE_TYPE_ICON_MAP["subtask"]) || JIRA_DEFAULT_ISSUE_ICON
+                issue.fields.issuetype.iconUrl = getIssueTypeIconUrl(issue.fields.issuetype.name)
             } else {
                 issue.fields.issuetype.iconUrl = await preFetchImage(issue.account, issue.fields.issuetype.iconUrl)
             }
@@ -296,12 +297,66 @@ async function fetchIssueImages(issue: IJiraIssue) {
         }
         if (issue.fields.priority && issue.fields.priority.iconUrl) {
             if (disableImages) {
-                const priorityName = (issue.fields.priority.name || '').toLowerCase()
-                issue.fields.priority.iconUrl = JIRA_PRIORITY_ICON_MAP[priorityName] || JIRA_DEFAULT_PRIORITY_ICON
+                issue.fields.priority.iconUrl = getPriorityIconUrl(issue.fields.priority.name)
             } else {
                 issue.fields.priority.iconUrl = await preFetchImage(issue.account, issue.fields.priority.iconUrl)
             }
         }
+    }
+}
+
+let customFieldsUpdate: Promise<void> = Promise.resolve()
+
+async function fetchCustomFields(): Promise<void> {
+    SettingsData.cache.columns = []
+    for (const account of SettingsData.accounts) {
+        try {
+            const response = await sendRequest(
+                {
+                    method: 'GET',
+                    path: `/field`,
+                    account: account,
+                }
+            ) as IJiraField[]
+            account.cache.customFieldsIdToName = {}
+            account.cache.customFieldsNameToId = {}
+            account.cache.customFieldsType = {}
+            for (const i in response) {
+                const field = response[i]
+                if (field.custom && field.schema && field.schema.customId) {
+                    account.cache.customFieldsIdToName[field.schema.customId] = field.name
+                    account.cache.customFieldsNameToId[field.name] = field.schema.customId.toString()
+                    account.cache.customFieldsType[field.schema.customId] = field.schema
+                    SettingsData.cache.columns.push(field.schema.customId.toString(), field.name.toUpperCase())
+                }
+            }
+            // Virtual field mapping for deprecated Epic fields and Parent fields (only if not provided by Jira server)
+            if (!account.cache.customFieldsNameToId['EPIC NAME']) account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
+            if (!account.cache.customFieldsNameToId['Epic Name']) account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
+            if (!account.cache.customFieldsNameToId['EPIC LINK']) account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
+            if (!account.cache.customFieldsNameToId['Epic Link']) account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
+            account.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
+
+            if (!account.cache.customFieldsNameToId['PARENT']) account.cache.customFieldsNameToId['PARENT'] = 'VIRTUAL_PARENT'
+            if (!account.cache.customFieldsNameToId['Parent']) account.cache.customFieldsNameToId['Parent'] = 'VIRTUAL_PARENT'
+            if (!account.cache.customFieldsNameToId['PARENT LINK']) account.cache.customFieldsNameToId['PARENT LINK'] = 'VIRTUAL_PARENT'
+            if (!account.cache.customFieldsNameToId['Parent Link']) account.cache.customFieldsNameToId['Parent Link'] = 'VIRTUAL_PARENT'
+            account.cache.customFieldsIdToName['VIRTUAL_PARENT'] = 'PARENT'
+        } catch (e) {
+            console.error('Error while retrieving custom fields list of account:', account.alias, e)
+        }
+    }
+    if (SettingsData.cache.columns.indexOf('EPIC NAME') === -1) {
+        SettingsData.cache.columns.push('EPIC NAME')
+    }
+    if (SettingsData.cache.columns.indexOf('EPIC LINK') === -1) {
+        SettingsData.cache.columns.push('EPIC LINK')
+    }
+    if (SettingsData.cache.columns.indexOf('PARENT') === -1) {
+        SettingsData.cache.columns.push('PARENT')
+    }
+    if (SettingsData.cache.columns.indexOf('PARENT LINK') === -1) {
+        SettingsData.cache.columns.push('PARENT LINK')
     }
 }
 
@@ -376,57 +431,14 @@ export default {
         account.cache.statusColor[status] = response.statusCategory.colorName
     },
 
-    async updateCustomFieldsCache(): Promise<void> {
-        SettingsData.cache.columns = []
-        for (const account of SettingsData.accounts) {
-            try {
-                const response = await sendRequest(
-                    {
-                        method: 'GET',
-                        path: `/field`,
-                        account: account,
-                    }
-                ) as IJiraField[]
-                account.cache.customFieldsIdToName = {}
-                account.cache.customFieldsNameToId = {}
-                account.cache.customFieldsType = {}
-                for (const i in response) {
-                    const field = response[i]
-                    if (field.custom && field.schema && field.schema.customId) {
-                        account.cache.customFieldsIdToName[field.schema.customId] = field.name
-                        account.cache.customFieldsNameToId[field.name] = field.schema.customId.toString()
-                        account.cache.customFieldsType[field.schema.customId] = field.schema
-                        SettingsData.cache.columns.push(field.schema.customId.toString(), field.name.toUpperCase())
-                    }
-                }
-                // Virtual field mapping for deprecated Epic fields and Parent fields (only if not provided by Jira server)
-                if (!account.cache.customFieldsNameToId['EPIC NAME']) account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
-                if (!account.cache.customFieldsNameToId['Epic Name']) account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
-                if (!account.cache.customFieldsNameToId['EPIC LINK']) account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
-                if (!account.cache.customFieldsNameToId['Epic Link']) account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
-                account.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
+    updateCustomFieldsCache(): Promise<void> {
+        customFieldsUpdate = fetchCustomFields()
+        return customFieldsUpdate
+    },
 
-                if (!account.cache.customFieldsNameToId['PARENT']) account.cache.customFieldsNameToId['PARENT'] = 'VIRTUAL_PARENT'
-                if (!account.cache.customFieldsNameToId['Parent']) account.cache.customFieldsNameToId['Parent'] = 'VIRTUAL_PARENT'
-                if (!account.cache.customFieldsNameToId['PARENT LINK']) account.cache.customFieldsNameToId['PARENT LINK'] = 'VIRTUAL_PARENT'
-                if (!account.cache.customFieldsNameToId['Parent Link']) account.cache.customFieldsNameToId['Parent Link'] = 'VIRTUAL_PARENT'
-                account.cache.customFieldsIdToName['VIRTUAL_PARENT'] = 'PARENT'
-            } catch (e) {
-                console.error('Error while retrieving custom fields list of account:', account.alias, e)
-            }
-        }
-        if (SettingsData.cache.columns.indexOf('EPIC NAME') === -1) {
-            SettingsData.cache.columns.push('EPIC NAME')
-        }
-        if (SettingsData.cache.columns.indexOf('EPIC LINK') === -1) {
-            SettingsData.cache.columns.push('EPIC LINK')
-        }
-        if (SettingsData.cache.columns.indexOf('PARENT') === -1) {
-            SettingsData.cache.columns.push('PARENT')
-        }
-        if (SettingsData.cache.columns.indexOf('PARENT LINK') === -1) {
-            SettingsData.cache.columns.push('PARENT LINK')
-        }
+    // Resolves once the custom field names being loaded are known, right away when none are loading
+    customFieldsLoaded(): Promise<void> {
+        return customFieldsUpdate
     },
 
     // async updateJQLAutoCompleteCache(): Promise<void> {

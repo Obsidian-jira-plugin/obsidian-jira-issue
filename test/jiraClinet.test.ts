@@ -304,6 +304,20 @@ describe('JiraClient', () => {
                 await assertion
             })
 
+            test('a timeout over the longest timer delay is lowered to it', async () => {
+                SettingsData.requestTimeout = '30d'
+                const settled = jest.fn()
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                issue.then(settled, settled)
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 25 days')
+
+                await jest.advanceTimersByTimeAsync(1000)
+                expect(settled).not.toHaveBeenCalled()
+                await jest.advanceTimersByTimeAsync(2 ** 31 - 1 - 1000)
+
+                await assertion
+            })
+
             test('an invalid timeout falls back to the default', async () => {
                 SettingsData.requestTimeout = 'soon'
                 const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
@@ -319,6 +333,22 @@ describe('JiraClient', () => {
     test.todo('getIssue')
     test.todo('getSearchResults')
     test.todo('updateStatusColorCache')
+        test('customFieldsLoaded waits for the custom fields being loaded', async () => {
+            SettingsData.accounts = [TestAccountOpen]
+            let answer: (response: unknown) => void
+            requestUrlMock.mockReturnValueOnce(new Promise(resolve => { answer = resolve }) as any)
+            const loaded = jest.fn()
+
+            void JiraClient.updateCustomFieldsCache()
+            void JiraClient.customFieldsLoaded().then(loaded)
+            await Promise.resolve()
+            expect(loaded).not.toHaveBeenCalled()
+
+            answer({ status: 200, headers: defaultHeaders, json: [] })
+            await JiraClient.customFieldsLoaded()
+            expect(loaded).toHaveBeenCalledTimes(1)
+        })
+
         test('updateCustomFieldsCache populates virtual EPIC NAME mapping', async () => {
             SettingsData.accounts = [TestAccountOpen]
             requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: [] } as any)

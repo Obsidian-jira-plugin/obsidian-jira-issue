@@ -174,7 +174,7 @@ describe('renderTableColumns', () => {
         ]
 
         test('looks up the Epic summary when online', async () => {
-            ;(getIssue as jest.Mock).mockResolvedValueOnce({ fields: { summary: 'Epic summary' } })
+            (getIssue as jest.Mock).mockResolvedValueOnce({ fields: { summary: 'Epic summary' } })
 
             const row = { cells: [] } as any
             await renderTableColumn(epicLinkColumns, epicLinkIssue(), row)
@@ -202,6 +202,32 @@ describe('renderTableColumns', () => {
             await renderTableColumn(columns, toDefaultedIssue({ ...issue, account: TestAccountOpen }), row, true)
 
             expect(row.cells[0].textContent).toEqual('Jane Doe')
+        })
+
+        test('shows the Epic key found in a custom field without an Epic Link mapping', async () => {
+            const issue: IJiraIssue = {
+                id: '10006',
+                key: 'TASK-6',
+                fields: {
+                    summary: 'Task summary',
+                    customfield_10100: 'Some text',
+                    customfield_10200: 'EPIC-9',
+                    customfield_10300: { key: 'EPIC-8', summary: 'Epic summary', self: 'https://host/rest/api/2/issue/10008', colorKey: 'blue' },
+                } as any,
+                account: TestAccountOpen,
+            }
+            const trimmed = trimIssueForColumns(issue, epicLinkColumns)
+
+            expect(trimmed.fields).toEqual({
+                customfield_10200: 'EPIC-9',
+                customfield_10300: { key: 'EPIC-8', summary: 'Epic summary' },
+            })
+
+            const row = { cells: [] } as any
+            await renderTableColumn(epicLinkColumns, { ...trimmed, account: TestAccountOpen }, row, true)
+
+            expect(getIssue).not.toHaveBeenCalled()
+            expect(row.cells[0].children[0].text).toEqual('EPIC-9')
         })
 
         test('shows no dev status instead of fetching it', async () => {

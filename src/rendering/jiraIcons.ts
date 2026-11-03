@@ -38,3 +38,12 @@ export const JIRA_PRIORITY_ICON_MAP: Record<string, string> = {
 
 export const JIRA_DEFAULT_ISSUE_ICON = JIRA_ISSUE_TYPE_ICON_MAP["issue"]
 export const JIRA_DEFAULT_PRIORITY_ICON = JIRA_PRIORITY_ICON_SVG_BASE_URL + "question-circle.svg"
+
+export function getIssueTypeIconUrl(issueTypeName: string): string {
+    const typeName = (issueTypeName || '').toLowerCase()
+    return JIRA_ISSUE_TYPE_ICON_MAP[typeName] || (typeName.startsWith("sub-") && JIRA_ISSUE_TYPE_ICON_MAP["subtask"]) || JIRA_DEFAULT_ISSUE_ICON
+}
+
+export function getPriorityIconUrl(priorityName: string): string {
+    return JIRA_PRIORITY_ICON_MAP[(priorityName || '').toLowerCase()] || JIRA_DEFAULT_PRIORITY_ICON
+}

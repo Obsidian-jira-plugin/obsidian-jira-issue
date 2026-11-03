@@ -1,6 +1,7 @@
 import { DataAdapter } from "obsidian"
 import { IJiraIssue, IJiraSearchResults } from "./interfaces/issueInterfaces"
 import { IJiraIssueAccountSettings } from "./interfaces/settingsInterfaces"
+import { getIssueTypeIconUrl, getPriorityIconUrl } from "./rendering/jiraIcons"
 import { SettingsData } from "./settings"
 
 // Last successfully fetched issues, searches and counts, persisted to disk so a failed refresh
@@ -60,6 +61,20 @@ export function trimIssueForChip(issue: IJiraIssue): IJiraIssue {
         },
         account: null,
     } as IJiraIssue
+}
+
+// Icons fetched from Jira are embedded as data: URIs (see fetchIssueImages). A saved issue
+// points to the built-in icon of the same name instead, which keeps the file small
+function withBuiltInIcons(issue: IJiraIssue): IJiraIssue {
+    const { issuetype, priority } = issue.fields
+    const fields = { ...issue.fields }
+    if (issuetype?.iconUrl?.startsWith('data:')) {
+        fields.issuetype = { ...issuetype, iconUrl: getIssueTypeIconUrl(issuetype.name) }
+    }
+    if (priority?.iconUrl?.startsWith('data:')) {
+        fields.priority = { ...priority, iconUrl: getPriorityIconUrl(priority.name) }
+    }
+    return { ...issue, fields }
 }
 
 function prune(): void {
@@ -191,25 +206,26 @@ export default {
 
     // Same key as ObjectsCache: the issue key, or the issue URL when the chip is tied to one Jira host
     rememberIssue(cacheKey: string, issue: IJiraIssue, fetchGeneration: number): void {
-        put(`issue:${cacheKey}`, issue.account, trimIssueForChip(issue), fetchGeneration)
+        put(`issue:${cacheKey}`, issue.account, withBuiltInIcons(trimIssueForChip(issue)), fetchGeneration)
     },
 
     getIssue(cacheKey: string): LastGoodItem<IJiraIssue> {
         return take<IJiraIssue>(`issue:${cacheKey}`, (issue, account) => ({ ...issue, account }))
     },
 
-    // trimIssue keeps the fields the search view renders (chip fields for a list, column fields for a table)
-    rememberSearch(cacheKey: string, searchResults: IJiraSearchResults, trimIssue: (issue: IJiraIssue) => IJiraIssue, fetchGeneration: number): void {
-        put(`search:${cacheKey}`, searchResults.account, {
-            issues: searchResults.issues.map(issue => ({ ...trimIssue(issue), account: null })),
+    // trimIssue keeps the fields the search view renders (chip fields for a list, column fields
+    // for a table), so savedKey must tell the views apart (see SearchView.getSavedResultsKey)
+    rememberSearch(savedKey: string, searchResults: IJiraSearchResults, trimIssue: (issue: IJiraIssue) => IJiraIssue, fetchGeneration: number): void {
+        put(`search:${savedKey}`, searchResults.account, {
+            issues: searchResults.issues.map(issue => ({ ...withBuiltInIcons(trimIssue(issue)), account: null })),
             total: searchResults.total,
             isLast: searchResults.isLast,
             account: null,
         }, fetchGeneration)
     },
 
-    getSearch(cacheKey: string): LastGoodItem<IJiraSearchResults> {
-        return take<IJiraSearchResults>(`search:${cacheKey}`, (searchResults, account) => ({
+    getSearch(savedKey: string): LastGoodItem<IJiraSearchResults> {
+        return take<IJiraSearchResults>(`search:${savedKey}`, (searchResults, account) => ({
             ...searchResults,
             account,
             issues: searchResults.issues.map(issue => ({ ...issue, account })),

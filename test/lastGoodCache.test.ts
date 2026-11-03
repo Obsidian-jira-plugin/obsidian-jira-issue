@@ -1,6 +1,7 @@
 jest.mock('../src/settings', () => { return { SettingsData: { accounts: [] } } })
 
 import LastGoodCache from '../src/lastGoodCache'
+import { JIRA_DEFAULT_PRIORITY_ICON, JIRA_ISSUE_TYPE_ICON_MAP } from '../src/rendering/jiraIcons'
 import { SettingsData } from '../src/settings'
 import { TestAccountBasic, TestAccountOpen } from './testData'
 
@@ -84,7 +85,7 @@ describe('LastGoodCache', () => {
             account: kAccountBasic,
             fields: {
                 summary: 'Issue summary',
-                issuetype: { name: 'Task', iconUrl: 'data:image/svg+xml;base64,AAAA' },
+                issuetype: { name: 'Task', iconUrl: JIRA_ISSUE_TYPE_ICON_MAP.task },
                 status: { name: 'In Progress', description: 'Being worked on', statusCategory: { colorName: 'yellow' } },
             },
         })
@@ -199,6 +200,22 @@ describe('LastGoodCache', () => {
             issues: [{ id: '10001', key: 'AAA-123', fields: { summary: 'Issue summary' }, account: kAccountBasic }],
         })
         expect(LastGoodCache.getCount('project = AAA')).toBeNull()
+    })
+
+    test('Saved issues point to the built-in icons instead of icons embedded from Jira', () => {
+        const issue = buildIssue(kAccountBasic)
+        issue.fields.priority = { name: 'Unknown priority', iconUrl: 'data:image/png;base64,BBBB' }
+        const searchResults = { total: 2, issues: [issue, buildIssue(kAccountBasic, 'AAA-456')], account: kAccountBasic }
+        searchResults.issues[1].fields.issuetype.iconUrl = 'https://cdn.example.com/story.svg'
+        const trimIssue = (issue: any) => ({ id: issue.id, key: issue.key, fields: { issuetype: issue.fields.issuetype, priority: issue.fields.priority } }) as any
+
+        LastGoodCache.rememberSearch('project = AAA', searchResults as any, trimIssue, LastGoodCache.generation())
+
+        const [first, second] = LastGoodCache.getSearch('project = AAA').data.issues
+        expect(first.fields.issuetype).toEqual({ name: 'Task', iconUrl: JIRA_ISSUE_TYPE_ICON_MAP.task, subtask: false })
+        expect(first.fields.priority).toEqual({ name: 'Unknown priority', iconUrl: JIRA_DEFAULT_PRIORITY_ICON })
+        expect(second.fields.issuetype.iconUrl).toEqual('https://cdn.example.com/story.svg')
+        expect(searchResults.issues[0].fields.issuetype.iconUrl).toEqual('data:image/svg+xml;base64,AAAA')
     })
 
     test('Count keeps only the total', () => {

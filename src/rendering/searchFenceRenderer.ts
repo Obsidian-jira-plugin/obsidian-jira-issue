@@ -7,19 +7,21 @@ import { renderTableColumn, trimIssueForColumns } from "./renderTableColumns"
 import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
 import RC, { IStaleInfo } from "./renderingCommon"
-import { ESearchColumnsTypes, ESearchResultsRenderingTypes, IJiraIssueAccountSettings, ISearchColumn, SEARCH_COLUMNS_DESCRIPTION } from "../interfaces/settingsInterfaces"
-
-function getColumns(searchView: SearchView): ISearchColumn[] {
-    return searchView.columns.length > 0 ? searchView.columns : SettingsData.searchColumns
-}
+import { ESearchColumnsTypes, ESearchResultsRenderingTypes, IJiraIssueAccountSettings, SEARCH_COLUMNS_DESCRIPTION } from "../interfaces/settingsInterfaces"
 
 // Only what this view renders is saved: a list shows chips, a table shows its columns
 function getIssueTrimmer(searchView: SearchView): (issue: IJiraIssue) => IJiraIssue {
     if (searchView.type === ESearchResultsRenderingTypes.LIST) {
         return trimIssueForChip
     }
-    const columns = getColumns(searchView)
+    const columns = searchView.getColumns()
     return issue => trimIssueForColumns(issue, columns)
+}
+
+// Columns of custom fields given by name need the names loaded from Jira to find their field
+function rememberSearch(searchView: SearchView, searchResults: IJiraSearchResults, generation: number): void {
+    void JiraClient.customFieldsLoaded().then(() =>
+        LastGoodCache.rememberSearch(searchView.getSavedResultsKey(), searchResults, getIssueTrimmer(searchView), generation))
 }
 
 async function renderSearchResults(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults, stale: IStaleInfo = null): Promise<void> {
@@ -31,18 +33,21 @@ async function renderSearchResults(rootEl: HTMLElement, searchView: SearchView, 
     }
 }
 
-// Keep showing the last results fetched successfully, flagged as stale, instead of the error
-async function renderSearchFailure(rootEl: HTMLElement, searchView: SearchView, error: unknown): Promise<void> {
-    const lastGood = LastGoodCache.getSearch(searchView.getCacheKey())
-    if (lastGood) {
-        try {
-            await renderSearchResults(rootEl, searchView, lastGood.data, { updateTime: lastGood.updateTime, error })
-            return
-        } catch {
-            // Saved results that cannot be rendered fall back to the error
-        }
+// For results Jira returned: if they cannot be rendered, the error is shown, not the saved
+// results, since Jira did answer. onRendered (saving the results) only runs after a render
+async function renderSearchResultsOrError(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults, onRendered: () => void = null): Promise<void> {
+    try {
+        await renderSearchResults(rootEl, searchView, searchResults)
+        onRendered?.()
+    } catch (err) {
+        RC.renderSearchError(rootEl, String(err), searchView)
     }
-    RC.renderSearchError(rootEl, error as string, searchView)
+}
+
+function renderSearchFailure(rootEl: HTMLElement, searchView: SearchView, error: unknown): Promise<void> {
+    return RC.renderSavedOrError(LastGoodCache.getSearch(searchView.getSavedResultsKey()), error,
+        (searchResults: IJiraSearchResults, stale: IStaleInfo) => renderSearchResults(rootEl, searchView, searchResults, stale),
+        async () => RC.renderSearchError(rootEl, error as string, searchView))
 }
 
 async function renderSearchResultsTable(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults, stale: IStaleInfo): Promise<void> {
@@ -60,7 +65,7 @@ function renderSearchResultsTableHeader(table: HTMLElement, searchView: SearchVi
         parent:
             createEl('thead', { attr: { style: getAccountBandStyle(searchView.account) }, parent: table })
     })
-    const columns = getColumns(searchView)
+    const columns = searchView.getColumns()
     for (const column of columns) {
         let name = SEARCH_COLUMNS_DESCRIPTION[column.type]
         // Frontmatter
@@ -88,7 +93,7 @@ async function renderSearchResultsTableBody(table: HTMLElement, searchView: Sear
     for (let issue of searchResults.issues) {
         issue = toDefaultedIssue(issue)
         const row = createEl('tr', { parent: tbody })
-        const columns = getColumns(searchView)
+        const columns = searchView.getColumns()
         await renderTableColumn(columns, issue, row, offline)
     }
 }
@@ -151,19 +156,18 @@ async function renderSearchView(rootEl: HTMLElement, searchView: SearchView): Pr
         if (cachedSearchResults.isError) {
             await renderSearchFailure(rootEl, searchView, cachedSearchResults.data)
         } else {
-            await renderSearchResults(rootEl, searchView, cachedSearchResults.data as IJiraSearchResults)
+            await renderSearchResultsOrError(rootEl, searchView, cachedSearchResults.data as IJiraSearchResults)
         }
     } else {
         // console.log(`Search results not available in the cache`)
         RC.renderLoadingItem('Loading...')
         const generation = LastGoodCache.generation()
         JiraClient.getSearchResults(searchView.query, { limit: searchView.limit || SettingsData.searchResultsLimit, account: searchView.account })
-            .then(async newSearchResults => {
+            .then(newSearchResults => {
                 searchView.account = newSearchResults.account
                 const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
-                await renderSearchResults(rootEl, searchView, searchResults)
-                LastGoodCache.rememberSearch(searchView.getCacheKey(), searchResults, getIssueTrimmer(searchView), generation)
-            }).catch(err => {
+                return renderSearchResultsOrError(rootEl, searchView, searchResults, () => rememberSearch(searchView, searchResults, generation))
+            }, err => {
                 ObjectsCache.add(searchView.getCacheKey(), err, true)
                 return renderSearchFailure(rootEl, searchView, err)
             })

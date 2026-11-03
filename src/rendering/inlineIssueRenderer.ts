@@ -88,16 +88,15 @@ export const InlineIssueRenderer = async (el: HTMLElement, ctx: MarkdownPostProc
             if (cachedIssue.isError) {
                 value.replaceChildren(RC.renderIssueFailure(issueKey, cachedIssue.data, compact, cacheKey))
             } else {
-                value.replaceChildren(RC.renderIssue(cachedIssue.data as IJiraIssue, compact))
+                value.replaceChildren(RC.renderIssueOrError(issueKey, cachedIssue.data as IJiraIssue, compact))
             }
         } else {
             value.replaceChildren(RC.renderLoadingItem(issueKey))
             const generation = LastGoodCache.generation()
             JiraClient.getIssue(issueKey, { account: getAccountByHost(host) }).then(newIssue => {
                 const issue = ObjectsCache.add(cacheKey, newIssue).data as IJiraIssue
-                value.replaceChildren(RC.renderIssue(issue, compact))
-                LastGoodCache.rememberIssue(cacheKey, issue, generation)
-            }).catch(err => {
+                value.replaceChildren(RC.renderIssueOrError(issueKey, issue, compact, () => LastGoodCache.rememberIssue(cacheKey, issue, generation)))
+            }, err => {
                 ObjectsCache.add(cacheKey, err, true)
                 value.replaceChildren(RC.renderIssueFailure(issueKey, err, compact, cacheKey))
             })

@@ -198,6 +198,40 @@ describe('RenderingCommon', () => {
 
             expect(rendered.children[0].className).toContain('is-delete')
         })
+
+        test('renders the error when saved data rendered asynchronously fails', async () => {
+            const renderError = jest.fn(async () => 'error')
+
+            const rendered = await RC.renderSavedOrError({ updateTime, data: {} }, new Error('Forbidden'), async () => { throw new Error('Cannot render') }, renderError)
+
+            expect(rendered).toEqual('error')
+            expect(renderError).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    describe('renderIssueOrError', () => {
+        const getIssueMock = LastGoodCache.getIssue as jest.Mock
+
+        test('renders the issue Jira returned, then runs onRendered', () => {
+            const onRendered = jest.fn()
+            const issue = { key: 'AAA-123', account: TestAccountOpen, fields: { issuetype: { iconUrl: null, name: 'Task' }, summary: 'Summary', status: { name: 'Done', statusCategory: { colorName: 'green' } } } } as any
+
+            const rendered = RC.renderIssueOrError('AAA-123', issue, false, onRendered) as any as FakeElement
+
+            expect(rendered.children.some(child => child.className.includes('issue-summary'))).toEqual(true)
+            expect(onRendered).toHaveBeenCalledTimes(1)
+        })
+
+        test('renders the error, not the saved issue, when the issue Jira returned cannot be rendered', () => {
+            const onRendered = jest.fn()
+
+            const rendered = RC.renderIssueOrError('AAA-123', { key: 'AAA-123', account: TestAccountOpen, fields: {} } as any, false, onRendered) as any as FakeElement
+
+            expect(rendered.children[0].className).toContain('is-delete')
+            expect(rendered.children.some(child => child.className.includes('ji-stale-marker'))).toEqual(false)
+            expect(getIssueMock).not.toHaveBeenCalled()
+            expect(onRendered).not.toHaveBeenCalled()
+        })
     })
 
     describe('web links', () => {

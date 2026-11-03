@@ -57,16 +57,15 @@ class InlineIssueWidget extends WidgetType {
             if (cachedIssue.isError) {
                 this._htmlContainer.replaceChildren(RC.renderIssueFailure(this._issueKey, cachedIssue.data, this._compact, this._cacheKey))
             } else {
-                this._htmlContainer.replaceChildren(RC.renderIssue(cachedIssue.data as IJiraIssue, this._compact))
+                this._htmlContainer.replaceChildren(RC.renderIssueOrError(this._issueKey, cachedIssue.data as IJiraIssue, this._compact))
             }
         } else {
             this._htmlContainer.replaceChildren(RC.renderLoadingItem(this._issueKey))
             const generation = LastGoodCache.generation()
             JiraClient.getIssue(this._issueKey, { account: getAccountByHost(this._host) }).then(newIssue => {
                 const issue = ObjectsCache.add(this._cacheKey, newIssue).data as IJiraIssue
-                this._htmlContainer.replaceChildren(RC.renderIssue(issue, this._compact))
-                LastGoodCache.rememberIssue(this._cacheKey, issue, generation)
-            }).catch(err => {
+                this._htmlContainer.replaceChildren(RC.renderIssueOrError(this._issueKey, issue, this._compact, () => LastGoodCache.rememberIssue(this._cacheKey, issue, generation)))
+            }, err => {
                 ObjectsCache.add(this._cacheKey, err, true)
                 this._htmlContainer.replaceChildren(RC.renderIssueFailure(this._issueKey, err, this._compact, this._cacheKey))
             })

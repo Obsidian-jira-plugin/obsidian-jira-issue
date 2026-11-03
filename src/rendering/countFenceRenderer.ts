@@ -19,18 +19,21 @@ function renderSearchCount(el: HTMLElement, searchResults: IJiraSearchResults, s
     el.replaceChildren(RC.renderContainer([tagsRow]))
 }
 
-// Keep showing the last count fetched successfully, flagged as stale, instead of the error
-function renderSearchCountFailure(el: HTMLElement, searchView: SearchView, error: unknown): void {
-    const lastGood = LastGoodCache.getCount(searchView.getCacheKey())
-    if (lastGood) {
-        try {
-            renderSearchCount(el, lastGood.data, searchView, { updateTime: lastGood.updateTime, error })
-            return
-        } catch {
-            // A saved count that cannot be rendered falls back to the error
-        }
+// For a count Jira returned: if it cannot be rendered, the error is shown, not the saved count,
+// since Jira did answer. onRendered (saving the count) only runs after a render
+function renderSearchCountOrError(el: HTMLElement, searchResults: IJiraSearchResults, searchView: SearchView, onRendered: () => void = null): void {
+    try {
+        renderSearchCount(el, searchResults, searchView)
+        onRendered?.()
+    } catch (err) {
+        RC.renderSearchError(el, String(err), searchView)
     }
-    RC.renderSearchError(el, error as string, searchView)
+}
+
+function renderSearchCountFailure(el: HTMLElement, searchView: SearchView, error: unknown): void {
+    RC.renderSavedOrError(LastGoodCache.getCount(searchView.getCacheKey()), error,
+        (searchResults: IJiraSearchResults, stale: IStaleInfo) => renderSearchCount(el, searchResults, searchView, stale),
+        () => RC.renderSearchError(el, error as string, searchView))
 }
 
 export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> => {
@@ -41,16 +44,15 @@ export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: M
         if (cachedSearchResults.isError) {
             renderSearchCountFailure(el, searchView, cachedSearchResults.data)
         } else {
-            renderSearchCount(el, (cachedSearchResults.data as IJiraSearchResults), searchView)
+            renderSearchCountOrError(el, (cachedSearchResults.data as IJiraSearchResults), searchView)
         }
     } else {
         RC.renderLoadingItem('Loading...')
         const generation = LastGoodCache.generation()
         JiraClient.getSearchResults(searchView.query, { limit: 1 }).then(newSearchResults => {
             const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
-            renderSearchCount(el, searchResults, searchView)
-            LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults, generation)
-        }).catch(err => {
+            renderSearchCountOrError(el, searchResults, searchView, () => LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults, generation))
+        }, err => {
             ObjectsCache.add(searchView.getCacheKey(), err, true)
             renderSearchCountFailure(el, searchView, err)
         })

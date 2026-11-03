@@ -113,6 +113,12 @@ export function trimIssueForColumns(issue: IJiraIssue, columns: ISearchColumn[])
             const customFieldColumn = resolveCustomFieldColumn(issue, column.extra)
             if (customFieldColumn.kind === 'EPIC') {
                 ['epic', 'parent', 'issuetype', `customfield_${getEpicLinkFieldId(issue)}`].forEach(keep)
+                // Without an Epic Link mapping (Server/DC) resolveEpic looks for an issue key in any custom field
+                for (const [field, value] of Object.entries(issue.fields)) {
+                    if (isEpicReference(field, value)) {
+                        fields[field] = typeof value === 'string' ? value : { key: value.key, summary: value.summary, name: value.name }
+                    }
+                }
             } else if (customFieldColumn.kind === 'PARENT') {
                 keep('parent')
             } else {
@@ -479,6 +485,20 @@ function getEpicLinkFieldId(issue: IJiraIssue): string {
     return issue.account?.cache?.customFieldsNameToId?.['EPIC LINK'] || issue.account?.cache?.customFieldsNameToId?.['Epic Link']
 }
 
+const ISSUE_KEY_VALUE_REGEX = /^[A-Za-z0-9_]+-\d+$/
+
+// The last fallback of resolveEpic: a custom field holding an issue key, or an object with one
+function isEpicReference(field: string, value: unknown): boolean {
+    if (!field.startsWith('customfield_') || !value) {
+        return false
+    }
+    if (typeof value === 'string') {
+        return ISSUE_KEY_VALUE_REGEX.test(value.trim())
+    }
+    const key = typeof value === 'object' ? (value as { key?: unknown }).key : null
+    return typeof key === 'string' && ISSUE_KEY_VALUE_REGEX.test(key)
+}
+
 async function resolveEpic(issue: IJiraIssue, depth = 0, offline = false): Promise<{ key?: string; summary?: string; isParentFallback?: boolean } | null> {
     if (!issue || !issue.fields || depth > 3) {
         return null
@@ -541,9 +561,9 @@ async function resolveEpic(issue: IJiraIssue, depth = 0, offline = false): Promi
 
     // 4. Scan all customfields for any Epic key or Epic object (Fallback for unmapped Jira Server / Data Center)
     for (const [key, val] of Object.entries(issue.fields)) {
-        if (!key.startsWith('customfield_') || !val) continue
+        if (!isEpicReference(key, val)) continue
 
-        if (typeof val === 'string' && /^[A-Za-z0-9_]+-\d+$/.test(val.trim())) {
+        if (typeof val === 'string') {
             const epicKey = val.trim()
             try {
                 const fetchedEpic = await lookupIssue(epicKey, issue, offline)
@@ -553,13 +573,9 @@ async function resolveEpic(issue: IJiraIssue, depth = 0, offline = false): Promi
             } catch {
                 return { key: epicKey }
             }
-        }
-
-        if (typeof val === 'object' && val !== null && (val as any).key) {
+        } else {
             const obj = val as any
-            if (typeof obj.key === 'string' && /^[A-Za-z0-9_]+-\d+$/.test(obj.key)) {
-                return { key: obj.key, summary: obj.summary || obj.name || obj.key }
-            }
+            return { key: obj.key, summary: obj.summary || obj.name || obj.key }
         }
     }
 

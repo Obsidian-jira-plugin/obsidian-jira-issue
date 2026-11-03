@@ -2,7 +2,7 @@ import moment from "moment"
 import { FrontMatterCache, TFile } from "obsidian"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
 import { EColorSchema, ERenderStyle, IJiraIssueAccountSettings } from "../interfaces/settingsInterfaces"
-import LastGoodCache from "../lastGoodCache"
+import LastGoodCache, { LastGoodItem } from "../lastGoodCache"
 import { ObsidianApp } from "../main"
 import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
@@ -180,19 +180,40 @@ export default {
         return tagsRow
     },
 
-    // Keep showing the last issue fetched successfully, flagged as stale, instead of the error
-    renderIssueFailure(issueKey: string, error: unknown, compact = false, cacheKey = issueKey): HTMLElement {
-        const lastGood = LastGoodCache.getIssue(cacheKey)
+    // Keep showing the last data fetched successfully, flagged as stale, instead of the error.
+    // Saved data that cannot be rendered falls back to the error, also when rendering is async
+    renderSavedOrError<T, R>(lastGood: LastGoodItem<T>, error: unknown, renderSaved: (data: T, stale: IStaleInfo) => R, renderError: () => R): R {
         if (lastGood) {
             try {
-                const tagsRow = this.renderIssue(lastGood.data, compact)
-                this.renderStaleMarker(tagsRow, 'this issue', { updateTime: lastGood.updateTime, error })
-                return tagsRow
+                const rendered = renderSaved(lastGood.data, { updateTime: lastGood.updateTime, error })
+                return rendered instanceof Promise ? rendered.catch(() => renderError()) as unknown as R : rendered
             } catch {
-                // A saved issue that cannot be rendered falls back to the error
+                // Falls back to the error below
             }
         }
-        return this.renderIssueError(issueKey, error as string)
+        return renderError()
+    },
+
+    renderIssueFailure(issueKey: string, error: unknown, compact = false, cacheKey = issueKey): HTMLElement {
+        return this.renderSavedOrError(LastGoodCache.getIssue(cacheKey), error,
+            (issue: IJiraIssue, stale: IStaleInfo) => {
+                const tagsRow = this.renderIssue(issue, compact)
+                this.renderStaleMarker(tagsRow, 'this issue', stale)
+                return tagsRow
+            },
+            () => this.renderIssueError(issueKey, error as string))
+    },
+
+    // For an issue Jira returned: if it cannot be rendered, the error is shown, not the saved
+    // issue, since Jira did answer. onRendered (saving the issue) only runs after a render
+    renderIssueOrError(issueKey: string, issue: IJiraIssue, compact = false, onRendered: () => void = null): HTMLElement {
+        try {
+            const tagsRow = this.renderIssue(issue, compact)
+            onRendered?.()
+            return tagsRow
+        } catch (err) {
+            return this.renderIssueError(issueKey, String(err))
+        }
     },
 
     formatUpdateTime(updateTime: number): string {
