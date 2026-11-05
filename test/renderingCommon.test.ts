@@ -222,6 +222,20 @@ describe('RenderingCommon', () => {
             expect(onRendered).toHaveBeenCalledTimes(1)
         })
 
+        test('keeps the rendered issue when saving it fails', () => {
+            const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
+            const issue = { key: 'AAA-123', account: TestAccountOpen, fields: { issuetype: { iconUrl: null, name: 'Task' }, summary: 'Summary', status: { name: 'Done', statusCategory: { colorName: 'green' } } } } as any
+            try {
+                const rendered = RC.renderIssueOrError('AAA-123', issue, false, () => { throw new Error('Cannot save') }) as any as FakeElement
+
+                expect(rendered.children.some(child => child.className.includes('issue-summary'))).toEqual(true)
+                expect(rendered.children.some(child => child.className.includes('is-delete'))).toEqual(false)
+                expect(warn).toHaveBeenCalledTimes(1)
+            } finally {
+                warn.mockRestore()
+            }
+        })
+
         test('renders the error, not the saved issue, when the issue Jira returned cannot be rendered', () => {
             const onRendered = jest.fn()
 

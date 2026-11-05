@@ -271,12 +271,16 @@ query: ${kQuery}
     })
 
     test('getSavedResultsKey tells the views of the same query apart', () => {
-        (SettingsData as any).searchColumns = [{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }]
-
-        expect(SearchView.fromString(`type: LIST\nquery: ${kQuery}`).getSavedResultsKey()).toEqual(`${kQuery}|LIST`)
-        expect(SearchView.fromString(`type: TABLE\nquery: ${kQuery}`).getSavedResultsKey()).toEqual(`${kQuery}|TABLE:KEY`)
-        expect(SearchView.fromString(`type: TABLE\nquery: ${kQuery}\ncolumns: KEY, ${COMPACT_SYMBOL}$CUSTOM1, NOTES.status`).getSavedResultsKey())
-            .toEqual(`${kQuery}|TABLE:KEY,${COMPACT_SYMBOL}CUSTOM_FIELD.CUSTOM1,NOTES.status`)
+        const searchColumns = (SettingsData as any).searchColumns
+        ;(SettingsData as any).searchColumns = [{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }]
+        try {
+            expect(SearchView.fromString(`type: LIST\nquery: ${kQuery}`).getSavedResultsKey()).toEqual(`${kQuery}|LIST`)
+            expect(SearchView.fromString(`type: TABLE\nquery: ${kQuery}`).getSavedResultsKey()).toEqual(`${kQuery}|TABLE:KEY`)
+            expect(SearchView.fromString(`type: TABLE\nquery: ${kQuery}\ncolumns: KEY, ${COMPACT_SYMBOL}$CUSTOM1, NOTES.status`).getSavedResultsKey())
+                .toEqual(`${kQuery}|TABLE:KEY,${COMPACT_SYMBOL}CUSTOM_FIELD.CUSTOM1,NOTES.status`)
+        } finally {
+            (SettingsData as any).searchColumns = searchColumns
+        }
     })
 
     afterEach(() => {

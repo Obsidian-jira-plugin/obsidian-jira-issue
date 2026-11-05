@@ -207,13 +207,28 @@ export default {
     // For an issue Jira returned: if it cannot be rendered, the error is shown, not the saved
     // issue, since Jira did answer. onRendered (saving the issue) only runs after a render
     renderIssueOrError(issueKey: string, issue: IJiraIssue, compact = false, onRendered: () => void = null): HTMLElement {
+        let tagsRow: HTMLElement
         try {
-            const tagsRow = this.renderIssue(issue, compact)
-            onRendered?.()
-            return tagsRow
+            tagsRow = this.renderIssue(issue, compact)
         } catch (err) {
             return this.renderIssueError(issueKey, String(err))
         }
+        this.saveRendered(onRendered)
+        return tagsRow
+    },
+
+    // Runs after a successful render. A failed save is only logged, so content that rendered
+    // fine is not replaced by an error
+    saveRendered(save: () => void): void {
+        try {
+            save?.()
+        } catch (err) {
+            this.logSaveError(err)
+        }
+    },
+
+    logSaveError(err: unknown): void {
+        console.warn('JiraIssue: unable to save the data for offline use', err)
     },
 
     formatUpdateTime(updateTime: number): string {

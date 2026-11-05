@@ -24,10 +24,11 @@ function renderSearchCount(el: HTMLElement, searchResults: IJiraSearchResults, s
 function renderSearchCountOrError(el: HTMLElement, searchResults: IJiraSearchResults, searchView: SearchView, onRendered: () => void = null): void {
     try {
         renderSearchCount(el, searchResults, searchView)
-        onRendered?.()
     } catch (err) {
         RC.renderSearchError(el, String(err), searchView)
+        return
     }
+    RC.saveRendered(onRendered)
 }
 
 function renderSearchCountFailure(el: HTMLElement, searchView: SearchView, error: unknown): void {

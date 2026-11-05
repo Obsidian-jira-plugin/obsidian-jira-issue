@@ -26,7 +26,7 @@ Examples
 ## Request timeout
 How long the plugin waits for Jira to answer a request. After that the request counts as failed, and issues, searches and counts show the last data loaded successfully, marked with a `!`. Without a timeout, a request sent on a connection that stopped working (for example right after switching VPN) could stay on "Loading ..." forever.
 
-The default value is `20s`. It uses the same syntax as the cache time, except that a number without unit means seconds. Values under 1 second are raised to 1 second, and values over about 24 days are lowered to that, the longest delay a timer supports. Increase it if large searches on a slow Jira server time out.
+The default value is `20s`. It uses the same syntax as the cache time, except that a number without unit means seconds. Values under 1 second are raised to 1 second, and values over about 25 days are lowered to that, the longest delay a timer supports. Increase it if large searches on a slow Jira server time out.
 
 ## Saved issue data
 To keep showing issues, searches and counts when Jira can't be reached, the plugin saves the last data it loaded successfully in `issues-cache.json`, in the plugin folder of your vault.

@@ -305,45 +305,64 @@ async function fetchIssueImages(issue: IJiraIssue) {
     }
 }
 
-let customFieldsUpdate: Promise<void> = Promise.resolve()
+// Resolves to the accounts whose custom field names are not known: loading them failed and
+// no names of an earlier load are left
+let customFieldsUpdate: Promise<Set<IJiraIssueAccountSettings>> = Promise.resolve(new Set())
+// Loads started again for those accounts, one per account at a time
+const customFieldsRetries = new Map<IJiraIssueAccountSettings, Promise<boolean>>()
 
-async function fetchCustomFields(): Promise<void> {
+function hasCustomFieldNames(account: IJiraIssueAccountSettings): boolean {
+    return Object.keys(account.cache.customFieldsNameToId || {}).length > 0
+}
+
+// true when the names of this account are known afterwards, from this load or an earlier one
+async function fetchAccountCustomFields(account: IJiraIssueAccountSettings): Promise<boolean> {
+    try {
+        const response = await sendRequest(
+            {
+                method: 'GET',
+                path: `/field`,
+                account: account,
+            }
+        ) as IJiraField[]
+        account.cache.customFieldsIdToName = {}
+        account.cache.customFieldsNameToId = {}
+        account.cache.customFieldsType = {}
+        for (const i in response) {
+            const field = response[i]
+            if (field.custom && field.schema && field.schema.customId) {
+                account.cache.customFieldsIdToName[field.schema.customId] = field.name
+                account.cache.customFieldsNameToId[field.name] = field.schema.customId.toString()
+                account.cache.customFieldsType[field.schema.customId] = field.schema
+                SettingsData.cache.columns.push(field.schema.customId.toString(), field.name.toUpperCase())
+            }
+        }
+        // Virtual field mapping for deprecated Epic fields and Parent fields (only if not provided by Jira server)
+        if (!account.cache.customFieldsNameToId['EPIC NAME']) account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
+        if (!account.cache.customFieldsNameToId['Epic Name']) account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
+        if (!account.cache.customFieldsNameToId['EPIC LINK']) account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
+        if (!account.cache.customFieldsNameToId['Epic Link']) account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
+        account.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
+
+        if (!account.cache.customFieldsNameToId['PARENT']) account.cache.customFieldsNameToId['PARENT'] = 'VIRTUAL_PARENT'
+        if (!account.cache.customFieldsNameToId['Parent']) account.cache.customFieldsNameToId['Parent'] = 'VIRTUAL_PARENT'
+        if (!account.cache.customFieldsNameToId['PARENT LINK']) account.cache.customFieldsNameToId['PARENT LINK'] = 'VIRTUAL_PARENT'
+        if (!account.cache.customFieldsNameToId['Parent Link']) account.cache.customFieldsNameToId['Parent Link'] = 'VIRTUAL_PARENT'
+        account.cache.customFieldsIdToName['VIRTUAL_PARENT'] = 'PARENT'
+        return true
+    } catch (e) {
+        console.error('Error while retrieving custom fields list of account:', account.alias, e)
+        // The name maps are only replaced after a successful load, so earlier names are still valid
+        return hasCustomFieldNames(account)
+    }
+}
+
+async function fetchCustomFields(): Promise<Set<IJiraIssueAccountSettings>> {
+    const accountsWithoutNames = new Set<IJiraIssueAccountSettings>()
     SettingsData.cache.columns = []
     for (const account of SettingsData.accounts) {
-        try {
-            const response = await sendRequest(
-                {
-                    method: 'GET',
-                    path: `/field`,
-                    account: account,
-                }
-            ) as IJiraField[]
-            account.cache.customFieldsIdToName = {}
-            account.cache.customFieldsNameToId = {}
-            account.cache.customFieldsType = {}
-            for (const i in response) {
-                const field = response[i]
-                if (field.custom && field.schema && field.schema.customId) {
-                    account.cache.customFieldsIdToName[field.schema.customId] = field.name
-                    account.cache.customFieldsNameToId[field.name] = field.schema.customId.toString()
-                    account.cache.customFieldsType[field.schema.customId] = field.schema
-                    SettingsData.cache.columns.push(field.schema.customId.toString(), field.name.toUpperCase())
-                }
-            }
-            // Virtual field mapping for deprecated Epic fields and Parent fields (only if not provided by Jira server)
-            if (!account.cache.customFieldsNameToId['EPIC NAME']) account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
-            if (!account.cache.customFieldsNameToId['Epic Name']) account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
-            if (!account.cache.customFieldsNameToId['EPIC LINK']) account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
-            if (!account.cache.customFieldsNameToId['Epic Link']) account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
-            account.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
-
-            if (!account.cache.customFieldsNameToId['PARENT']) account.cache.customFieldsNameToId['PARENT'] = 'VIRTUAL_PARENT'
-            if (!account.cache.customFieldsNameToId['Parent']) account.cache.customFieldsNameToId['Parent'] = 'VIRTUAL_PARENT'
-            if (!account.cache.customFieldsNameToId['PARENT LINK']) account.cache.customFieldsNameToId['PARENT LINK'] = 'VIRTUAL_PARENT'
-            if (!account.cache.customFieldsNameToId['Parent Link']) account.cache.customFieldsNameToId['Parent Link'] = 'VIRTUAL_PARENT'
-            account.cache.customFieldsIdToName['VIRTUAL_PARENT'] = 'PARENT'
-        } catch (e) {
-            console.error('Error while retrieving custom fields list of account:', account.alias, e)
+        if (!await fetchAccountCustomFields(account)) {
+            accountsWithoutNames.add(account)
         }
     }
     if (SettingsData.cache.columns.indexOf('EPIC NAME') === -1) {
@@ -358,6 +377,22 @@ async function fetchCustomFields(): Promise<void> {
     if (SettingsData.cache.columns.indexOf('PARENT LINK') === -1) {
         SettingsData.cache.columns.push('PARENT LINK')
     }
+    return accountsWithoutNames
+}
+
+function retryAccountCustomFields(account: IJiraIssueAccountSettings, accountsWithoutNames: Set<IJiraIssueAccountSettings>): Promise<boolean> {
+    let retry = customFieldsRetries.get(account)
+    if (!retry) {
+        retry = fetchAccountCustomFields(account).then(loaded => {
+            customFieldsRetries.delete(account)
+            if (loaded) {
+                accountsWithoutNames.delete(account)
+            }
+            return loaded
+        })
+        customFieldsRetries.set(account, retry)
+    }
+    return retry
 }
 
 export default {
@@ -431,14 +466,20 @@ export default {
         account.cache.statusColor[status] = response.statusCategory.colorName
     },
 
-    updateCustomFieldsCache(): Promise<void> {
+    async updateCustomFieldsCache(): Promise<void> {
         customFieldsUpdate = fetchCustomFields()
-        return customFieldsUpdate
+        await customFieldsUpdate
     },
 
-    // Resolves once the custom field names being loaded are known, right away when none are loading
-    customFieldsLoaded(): Promise<void> {
-        return customFieldsUpdate
+    // Resolves once the custom field names being loaded are known, right away when none are loading.
+    // false when the names of this account could not be loaded (e.g. timeout or 403 on /field).
+    // Callers have just had an answer from Jira, so names that failed before are loaded again
+    async customFieldsLoaded(account: IJiraIssueAccountSettings): Promise<boolean> {
+        const accountsWithoutNames = await customFieldsUpdate
+        if (!account || !accountsWithoutNames.has(account)) {
+            return true
+        }
+        return retryAccountCustomFields(account, accountsWithoutNames)
     },
 
     // async updateJQLAutoCompleteCache(): Promise<void> {

@@ -3,7 +3,7 @@ import { toDefaultedIssue, IJiraIssue, IJiraSearchResults } from "../interfaces/
 import JiraClient from "../client/jiraClient"
 import LastGoodCache, { trimIssueForChip } from "../lastGoodCache"
 import ObjectsCache from "../objectsCache"
-import { renderTableColumn, trimIssueForColumns } from "./renderTableColumns"
+import { hasCustomFieldColumnsByName, renderTableColumn, trimIssueForColumns } from "./renderTableColumns"
 import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
 import RC, { IStaleInfo } from "./renderingCommon"
@@ -18,10 +18,22 @@ function getIssueTrimmer(searchView: SearchView): (issue: IJiraIssue) => IJiraIs
     return issue => trimIssueForColumns(issue, columns)
 }
 
-// Columns of custom fields given by name need the names loaded from Jira to find their field
+// Columns of custom fields given by name need the names loaded from Jira to find their field.
+// If the names could not be loaded, saving would drop those columns from the last good results
 function rememberSearch(searchView: SearchView, searchResults: IJiraSearchResults, generation: number): void {
-    void JiraClient.customFieldsLoaded().then(() =>
-        LastGoodCache.rememberSearch(searchView.getSavedResultsKey(), searchResults, getIssueTrimmer(searchView), generation))
+    const save = () => LastGoodCache.rememberSearch(searchView.getSavedResultsKey(), searchResults, getIssueTrimmer(searchView), generation)
+    const needsNames = searchView.type !== ESearchResultsRenderingTypes.LIST && hasCustomFieldColumnsByName(searchView.getColumns())
+    if (!needsNames) {
+        save()
+        return
+    }
+    JiraClient.customFieldsLoaded(searchResults.account)
+        .then(namesLoaded => {
+            if (namesLoaded) {
+                save()
+            }
+        })
+        .catch(err => RC.logSaveError(err))
 }
 
 async function renderSearchResults(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults, stale: IStaleInfo = null): Promise<void> {
@@ -38,10 +50,11 @@ async function renderSearchResults(rootEl: HTMLElement, searchView: SearchView, 
 async function renderSearchResultsOrError(rootEl: HTMLElement, searchView: SearchView, searchResults: IJiraSearchResults, onRendered: () => void = null): Promise<void> {
     try {
         await renderSearchResults(rootEl, searchView, searchResults)
-        onRendered?.()
     } catch (err) {
         RC.renderSearchError(rootEl, String(err), searchView)
+        return
     }
+    RC.saveRendered(onRendered)
 }
 
 function renderSearchFailure(rootEl: HTMLElement, searchView: SearchView, error: unknown): Promise<void> {

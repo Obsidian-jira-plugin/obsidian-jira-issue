@@ -929,7 +929,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Request timeout')
-            .setDesc('Time to wait for Jira to answer. After that the request counts as failed and the last data loaded successfully is shown instead. A number without unit means seconds, it can be from 1s to about 24 days. Increase it if large searches time out.')
+            .setDesc('Time to wait for Jira to answer. After that the request counts as failed and the last data loaded successfully is shown instead. A number without unit means seconds, it can be from 1s to about 25 days. Increase it if large searches time out.')
             .addText(text => text
                 .setPlaceholder('Example: 20s, 1m')
                 .setValue(SettingsData.requestTimeout)

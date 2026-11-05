@@ -603,6 +603,15 @@ function resolveCustomFieldColumn(issue: IJiraIssue, customField: string): Custo
     return { kind: 'FIELD', field: `customfield_${fieldId}` }
 }
 
+// Columns of custom fields given by name (not by id, and not Epic or Parent) need the custom
+// field names loaded from Jira to find their field
+export function hasCustomFieldColumnsByName(columns: ISearchColumn[]): boolean {
+    return columns.some(column => column.type === ESearchColumnsTypes.CUSTOM_FIELD
+        && !!column.extra
+        && !Number(column.extra)
+        && !VIRTUAL_CUSTOM_FIELD_ALIASES.includes(column.extra.toUpperCase()))
+}
+
 async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement, offline: boolean): Promise<void> {
     const customFieldColumn = resolveCustomFieldColumn(issue, customField)
 

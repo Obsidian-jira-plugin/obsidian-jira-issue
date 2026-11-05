@@ -340,13 +340,77 @@ describe('JiraClient', () => {
             const loaded = jest.fn()
 
             void JiraClient.updateCustomFieldsCache()
-            void JiraClient.customFieldsLoaded().then(loaded)
+            void JiraClient.customFieldsLoaded(TestAccountOpen).then(loaded)
             await Promise.resolve()
             expect(loaded).not.toHaveBeenCalled()
 
             answer({ status: 200, headers: defaultHeaders, json: [] })
-            await JiraClient.customFieldsLoaded()
-            expect(loaded).toHaveBeenCalledTimes(1)
+            expect(await JiraClient.customFieldsLoaded(TestAccountOpen)).toEqual(true)
+            expect(loaded).toHaveBeenCalledWith(true)
+        })
+
+        describe('when the custom field names fail to load', () => {
+            const accountWithoutNames = (id: string) => ({
+                ...TestAccountOpen,
+                id,
+                cache: { ...TestAccountOpen.cache, customFieldsIdToName: {} as Record<string, string>, customFieldsNameToId: {} as Record<string, string>, customFieldsType: {} },
+            })
+            const forbidden = { status: 403, headers: defaultHeaders, json: {} } as any
+            const fields = { status: 200, headers: defaultHeaders, json: [{ custom: true, name: 'Team', schema: { customId: 10010 } }] } as any
+            let consoleError: jest.SpyInstance
+
+            beforeEach(() => {
+                consoleError = jest.spyOn(console, 'error').mockImplementation(() => null)
+            })
+
+            afterEach(() => {
+                consoleError.mockRestore()
+            })
+
+            test('customFieldsLoaded tells which accounts have no names', async () => {
+                const failingAccount = accountWithoutNames('failing')
+                const workingAccount = accountWithoutNames('working')
+                SettingsData.accounts = [failingAccount, workingAccount]
+                requestUrlMock
+                    .mockReturnValueOnce(forbidden)
+                    .mockReturnValueOnce(fields)
+                    .mockReturnValueOnce(forbidden)
+
+                await JiraClient.updateCustomFieldsCache()
+
+                expect(await JiraClient.customFieldsLoaded(failingAccount)).toEqual(false)
+                expect(await JiraClient.customFieldsLoaded(workingAccount)).toEqual(true)
+            })
+
+            test('customFieldsLoaded loads the names again, once for parallel calls', async () => {
+                const account = accountWithoutNames('retry')
+                SettingsData.accounts = [account]
+                requestUrlMock
+                    .mockReturnValueOnce(forbidden)
+                    .mockReturnValueOnce(fields)
+                await JiraClient.updateCustomFieldsCache()
+
+                const loaded = await Promise.all([JiraClient.customFieldsLoaded(account), JiraClient.customFieldsLoaded(account)])
+
+                expect(loaded).toEqual([true, true])
+                expect(account.cache.customFieldsNameToId['Team']).toEqual('10010')
+                expect(await JiraClient.customFieldsLoaded(account)).toEqual(true)
+                expect(requestUrlMock).toHaveBeenCalledTimes(2)
+            })
+
+            test('names of an earlier load still count when loading them again fails', async () => {
+                const account = accountWithoutNames('reload')
+                SettingsData.accounts = [account]
+                requestUrlMock
+                    .mockReturnValueOnce(fields)
+                    .mockReturnValueOnce(forbidden)
+                await JiraClient.updateCustomFieldsCache()
+
+                await JiraClient.updateCustomFieldsCache()
+
+                expect(await JiraClient.customFieldsLoaded(account)).toEqual(true)
+                expect(account.cache.customFieldsNameToId['Team']).toEqual('10010')
+            })
         })
 
         test('updateCustomFieldsCache populates virtual EPIC NAME mapping', async () => {

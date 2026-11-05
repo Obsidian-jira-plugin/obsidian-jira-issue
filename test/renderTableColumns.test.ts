@@ -7,7 +7,7 @@ jest.mock('../src/client/jiraClient', () => ({ __esModule: true, default: { getD
 
 import { getIssue } from '../src/api/apiBase'
 import JiraClient from '../src/client/jiraClient'
-import { formatCopyTemplate, renderTableColumn, trimIssueForColumns } from '../src/rendering/renderTableColumns'
+import { formatCopyTemplate, hasCustomFieldColumnsByName, renderTableColumn, trimIssueForColumns } from '../src/rendering/renderTableColumns'
 import { SettingsData } from '../src/settings'
 import { ESearchColumnsTypes, ISearchColumn } from '../src/interfaces/settingsInterfaces'
 import { IJiraIssue, toDefaultedIssue } from '../src/interfaces/issueInterfaces'
@@ -308,6 +308,22 @@ describe('renderTableColumns', () => {
                 assignee: { displayName: 'Jane Doe' },
             })
             expect(formatCopyTemplate('{key} {summary} [{status}] {assignee}', { ...trimmed, account: TestAccountOpen })).toEqual('TASK-5 Fix login [Done] Jane Doe')
+        })
+    })
+
+    describe('hasCustomFieldColumnsByName', () => {
+        const customField = (extra: string): ISearchColumn => ({ type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra })
+
+        test('is true for a custom field column given by name', () => {
+            expect(hasCustomFieldColumnsByName([{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }, customField('Team')])).toEqual(true)
+        })
+
+        test('is false for custom field columns given by id, Epic or Parent', () => {
+            expect(hasCustomFieldColumnsByName([customField('10010'), customField('Epic Link'), customField('PARENT')])).toEqual(false)
+        })
+
+        test('is false without custom field columns', () => {
+            expect(hasCustomFieldColumnsByName([{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }])).toEqual(false)
         })
     })
 })

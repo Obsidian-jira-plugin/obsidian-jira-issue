@@ -6,7 +6,7 @@ jest.mock('../src/settings', () => ({
 jest.mock('../src/api/apiBase', () => ({ getIssue: jest.fn() }))
 jest.mock('../src/client/jiraClient', () => ({
     __esModule: true,
-    default: { getSearchResults: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve()) },
+    default: { getSearchResults: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve(true)) },
 }))
 jest.mock('../src/lastGoodCache', () => ({
     __esModule: true,
@@ -40,6 +40,7 @@ function createFakeElement(options: any = {}): any {
         appendChild(child: any) { this.children.push(child); return child },
         prepend(child: any) { this.children.unshift(child) },
         appendText: jest.fn(),
+        setText(text: string) { this.textContent = text },
         onClickEvent: jest.fn(),
         onNodeInserted: jest.fn(),
     }
@@ -54,6 +55,7 @@ function buildRootElement(): any {
 }
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+const chipIssue = (key: string) => ({ key, account: TestAccountOpen, fields: { summary: 'Summary', issuetype: { name: 'Task' }, status: { name: 'Done', statusCategory: { colorName: 'green' } } } })
 const getSearchResultsMock = JiraClient.getSearchResults as jest.Mock
 
 beforeAll(() => {
@@ -97,6 +99,18 @@ describe('CountFenceRenderer', () => {
         expect(RC.renderSearchError).not.toHaveBeenCalled()
         expect(ObjectsCache.get('project = BBB').isError).toEqual(true)
     })
+
+    test('a count that rendered stays shown when saving it fails', async () => {
+        getSearchResultsMock.mockResolvedValueOnce({ total: 3, issues: [], account: TestAccountOpen })
+        ;(LastGoodCache.rememberCount as jest.Mock).mockImplementationOnce(() => { throw new Error('Cannot save') })
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
+
+        await CountFenceRenderer('project = EEE', buildRootElement(), null)
+        await settle()
+
+        expect(RC.renderSearchError).not.toHaveBeenCalled()
+        expect(warn).toHaveBeenCalledTimes(1)
+    })
 })
 
 describe('SearchFenceRenderer', () => {
@@ -131,6 +145,53 @@ describe('SearchFenceRenderer', () => {
 
         expect(LastGoodCache.getSearch).toHaveBeenCalledWith('project = DDD|LIST')
         expect(RC.renderSearchError).toHaveBeenCalledTimes(1)
+    })
+
+    test('results that rendered stay shown when saving them fails', async () => {
+        getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-3')], account: TestAccountOpen })
+        ;(LastGoodCache.rememberSearch as jest.Mock).mockImplementationOnce(() => { throw new Error('Cannot save') })
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
+
+        await SearchFenceRenderer('type: LIST\nquery: project = EEE', buildRootElement(), null)
+        await settle()
+
+        expect(RC.renderSearchError).not.toHaveBeenCalled()
+        expect(warn).toHaveBeenCalledWith('JiraIssue: unable to save the data for offline use', expect.any(Error))
+    })
+
+    test('a table with a custom field column given by name is not saved when the field names could not be loaded', async () => {
+        getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-4')], account: TestAccountOpen })
+        ;(JiraClient.customFieldsLoaded as jest.Mock).mockResolvedValueOnce(false)
+
+        await SearchFenceRenderer('type: TABLE\nquery: project = FFF\ncolumns: KEY, $Team', buildRootElement(), null)
+        await settle()
+
+        expect(RC.renderSearchError).not.toHaveBeenCalled()
+        expect(LastGoodCache.rememberSearch).not.toHaveBeenCalled()
+    })
+
+    test('a table with a custom field column given by name is saved once the field names are loaded', async () => {
+        getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-5')], account: TestAccountOpen })
+
+        await SearchFenceRenderer('type: TABLE\nquery: project = GGG\ncolumns: KEY, $Team', buildRootElement(), null)
+        await settle()
+
+        expect(JiraClient.customFieldsLoaded).toHaveBeenCalledWith(TestAccountOpen)
+        expect(LastGoodCache.rememberSearch).toHaveBeenCalledWith('project = GGG|TABLE:KEY,CUSTOM_FIELD.Team', expect.anything(), expect.anything(), 0)
+    })
+
+    test.each([
+        ['a list', 'type: LIST\nquery: project = HHH', 'project = HHH|LIST'],
+        ['a table without custom field columns given by name', 'type: TABLE\nquery: project = HHH\ncolumns: KEY, $10010, $Epic Link', 'project = HHH|TABLE:KEY,CUSTOM_FIELD.10010,CUSTOM_FIELD.Epic Link'],
+    ])('%s is saved without waiting for the field names', async (_view, source, savedKey) => {
+        getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-6')], account: TestAccountOpen })
+
+        await SearchFenceRenderer(source, buildRootElement(), null)
+        await settle()
+
+        expect(RC.renderSearchError).not.toHaveBeenCalled()
+        expect(JiraClient.customFieldsLoaded).not.toHaveBeenCalled()
+        expect(LastGoodCache.rememberSearch).toHaveBeenCalledWith(savedKey, expect.anything(), expect.anything(), 0)
     })
 })
 
