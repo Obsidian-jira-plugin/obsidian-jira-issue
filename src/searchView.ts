@@ -140,4 +140,18 @@ export class SearchView {
         }
         return this._cacheKey
     }
+
+    // Columns of a table: its own, or the default ones from the settings
+    getColumns(): ISearchColumn[] {
+        return this.columns.length > 0 ? this.columns : SettingsData.searchColumns
+    }
+
+    // Saved results keep only what the view renders (chip fields for a list, column fields for a
+    // table), so each view of the same query gets its own saved entry
+    getSavedResultsKey(): string {
+        const view = this.type === ESearchResultsRenderingTypes.LIST
+            ? this.type
+            : `${this.type}:` + this.getColumns().map(c => (c.compact ? COMPACT_SYMBOL : '') + c.type + (c.extra ? '.' + c.extra : '')).join(',')
+        return `${this.getCacheKey()}|${view}`
+    }
 }

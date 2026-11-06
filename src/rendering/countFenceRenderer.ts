@@ -1,18 +1,40 @@
 import { MarkdownPostProcessorContext } from "obsidian"
 import { IJiraSearchResults } from "../interfaces/issueInterfaces"
 import JiraClient from "../client/jiraClient"
+import LastGoodCache from "../lastGoodCache"
 import ObjectsCache from "../objectsCache"
-import RC from "./renderingCommon"
+import RC, { IStaleInfo } from "./renderingCommon"
 import { SearchView } from "../searchView"
 
-function renderSearchCount(el: HTMLElement, searchResults: IJiraSearchResults, searchView: SearchView): void {
+function renderSearchCount(el: HTMLElement, searchResults: IJiraSearchResults, searchView: SearchView, stale: IStaleInfo = null): void {
     const tagsRow = createDiv('ji-tags has-addons')
     RC.renderAccountColorBand(searchResults.account, tagsRow)
     if (searchView.label !== '') {
         createSpan({ cls: `ji-tag is-link ${RC.getTheme()}`, text: searchView.label || `Count`, title: searchView.query, parent: tagsRow })
     }
     createSpan({ cls: `ji-tag ${RC.getTheme()}`, text: searchResults.total.toString(), title: searchView.query, parent: tagsRow })
+    if (stale) {
+        RC.renderStaleMarker(tagsRow, 'this count', stale)
+    }
     el.replaceChildren(RC.renderContainer([tagsRow]))
+}
+
+// For a count Jira returned: if it cannot be rendered, the error is shown, not the saved count,
+// since Jira did answer. onRendered (saving the count) only runs after a render
+function renderSearchCountOrError(el: HTMLElement, searchResults: IJiraSearchResults, searchView: SearchView, onRendered: () => void = null): void {
+    try {
+        renderSearchCount(el, searchResults, searchView)
+    } catch (err) {
+        RC.renderSearchError(el, String(err), searchView)
+        return
+    }
+    RC.saveRendered(onRendered)
+}
+
+function renderSearchCountFailure(el: HTMLElement, searchView: SearchView, error: unknown): void {
+    RC.renderSavedOrError(LastGoodCache.getCount(searchView.getCacheKey()), error,
+        (searchResults: IJiraSearchResults, stale: IStaleInfo) => renderSearchCount(el, searchResults, searchView, stale),
+        () => RC.renderSearchError(el, error as string, searchView))
 }
 
 export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> => {
@@ -21,18 +43,19 @@ export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: M
     const cachedSearchResults = ObjectsCache.get(searchView.getCacheKey())
     if (cachedSearchResults) {
         if (cachedSearchResults.isError) {
-            RC.renderSearchError(el, cachedSearchResults.data as string, searchView)
+            renderSearchCountFailure(el, searchView, cachedSearchResults.data)
         } else {
-            renderSearchCount(el, (cachedSearchResults.data as IJiraSearchResults), searchView)
+            renderSearchCountOrError(el, (cachedSearchResults.data as IJiraSearchResults), searchView)
         }
     } else {
         RC.renderLoadingItem('Loading...')
+        const generation = LastGoodCache.generation()
         JiraClient.getSearchResults(searchView.query, { limit: 1 }).then(newSearchResults => {
             const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
-            renderSearchCount(el, searchResults, searchView)
-        }).catch(err => {
+            renderSearchCountOrError(el, searchResults, searchView, () => LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults, generation))
+        }, err => {
             ObjectsCache.add(searchView.getCacheKey(), err, true)
-            RC.renderSearchError(el, err, searchView)
+            renderSearchCountFailure(el, searchView, err)
         })
     }
 }

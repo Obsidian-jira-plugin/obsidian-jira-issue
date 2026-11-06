@@ -58,7 +58,82 @@ export function formatCopyTemplate(template: string, issue: IJiraIssue): string 
         Object.prototype.hasOwnProperty.call(COPY_TEMPLATE_PLACEHOLDERS, name) ? COPY_TEMPLATE_PLACEHOLDERS[name](issue) ?? '' : match)
 }
 
-export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement): Promise<void> => {
+// Issue fields each column renders, keep in sync with renderTableColumn (and with
+// COPY_TEMPLATE_PLACEHOLDERS for the copy column). KEY, NOTES and DEV_STATUS only need the
+// issue key and id; people and custom fields are handled below
+const COLUMN_FIELDS: Partial<Record<ESearchColumnsTypes, string[]>> = {
+    [ESearchColumnsTypes.SUMMARY]: ['summary'],
+    [ESearchColumnsTypes.DESCRIPTION]: ['description'],
+    [ESearchColumnsTypes.TYPE]: ['issuetype'],
+    [ESearchColumnsTypes.CREATED]: ['created'],
+    [ESearchColumnsTypes.UPDATED]: ['updated'],
+    [ESearchColumnsTypes.PRIORITY]: ['priority'],
+    [ESearchColumnsTypes.STATUS]: ['status'],
+    [ESearchColumnsTypes.DUE_DATE]: ['duedate'],
+    [ESearchColumnsTypes.RESOLUTION]: ['resolution'],
+    [ESearchColumnsTypes.RESOLUTION_DATE]: ['resolutiondate'],
+    [ESearchColumnsTypes.PROJECT]: ['project'],
+    [ESearchColumnsTypes.ENVIRONMENT]: ['environment'],
+    [ESearchColumnsTypes.AGGREGATE_PROGRESS]: ['aggregateprogress'],
+    [ESearchColumnsTypes.AGGREGATE_TIME_ESTIMATED]: ['aggregatetimeestimate'],
+    [ESearchColumnsTypes.AGGREGATE_TIME_ORIGINAL_ESTIMATE]: ['aggregatetimeoriginalestimate'],
+    [ESearchColumnsTypes.AGGREGATE_TIME_SPENT]: ['aggregatetimespent'],
+    [ESearchColumnsTypes.FIX_VERSIONS]: ['fixVersions'],
+    [ESearchColumnsTypes.LABELS]: ['labels'],
+    [ESearchColumnsTypes.COMPONENTS]: ['components'],
+    [ESearchColumnsTypes.LAST_VIEWED]: ['lastViewed'],
+    [ESearchColumnsTypes.PROGRESS]: ['progress'],
+    [ESearchColumnsTypes.TIME_ESTIMATE]: ['timeestimate'],
+    [ESearchColumnsTypes.TIME_ORIGINAL_ESTIMATE]: ['timeoriginalestimate'],
+    [ESearchColumnsTypes.TIME_SPENT]: ['timespent'],
+    [ESearchColumnsTypes.COPY_TO_CLIPBOARD]: ['summary', 'status', 'issuetype', 'priority', 'project', 'labels'],
+}
+
+const PEOPLE_COLUMN_FIELDS: Partial<Record<ESearchColumnsTypes, string[]>> = {
+    [ESearchColumnsTypes.REPORTER]: ['reporter'],
+    [ESearchColumnsTypes.ASSIGNEE]: ['assignee'],
+    [ESearchColumnsTypes.COPY_TO_CLIPBOARD]: ['assignee', 'reporter'],
+}
+
+// Saved search results end up in the vault: keep only what the columns render. People keep
+// their name only (no email, account id or avatar), so compact columns show the name offline
+export function trimIssueForColumns(issue: IJiraIssue, columns: ISearchColumn[]): IJiraIssue {
+    const fields: Record<string, unknown> = {}
+    const keep = (field: string) => {
+        if (issue.fields[field] !== undefined) {
+            fields[field] = issue.fields[field]
+        }
+    }
+    const keepPersonName = (field: string) => {
+        fields[field] = issue.fields[field] && { displayName: issue.fields[field].displayName }
+    }
+    for (const column of columns) {
+        (PEOPLE_COLUMN_FIELDS[column.type] || []).forEach(keepPersonName)
+        if (column.type === ESearchColumnsTypes.CUSTOM_FIELD) {
+            const customFieldColumn = resolveCustomFieldColumn(issue, column.extra)
+            if (customFieldColumn.kind === 'EPIC') {
+                ['epic', 'parent', 'issuetype', `customfield_${getEpicLinkFieldId(issue)}`].forEach(keep)
+                // Without an Epic Link mapping (Server/DC) resolveEpic looks for an issue key in any custom field
+                for (const [field, value] of Object.entries(issue.fields)) {
+                    if (isEpicReference(field, value)) {
+                        fields[field] = typeof value === 'string' ? value : { key: value.key, summary: value.summary, name: value.name }
+                    }
+                }
+            } else if (customFieldColumn.kind === 'PARENT') {
+                keep('parent')
+            } else {
+                keep(customFieldColumn.field)
+            }
+        } else {
+            (COLUMN_FIELDS[column.type] || []).forEach(keep)
+        }
+    }
+    return { id: issue.id, key: issue.key, fields, account: null } as IJiraIssue
+}
+
+// offline: the issue comes from the saved results shown while Jira is unreachable, so columns
+// that need more data from Jira only use what is already in memory
+export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement, offline = false): Promise<void> => {
     let markdownNotes: TFile[] = null
     for (const column of columns) {
         switch (column.type) {
@@ -290,7 +365,7 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
             }
             case ESearchColumnsTypes.CUSTOM_FIELD: {
                 const customCell = createEl('td', { parent: row })
-                await renderCustomFieldCell(issue, column.extra, customCell)
+                await renderCustomFieldCell(issue, column.extra, customCell, offline)
                 break
             }
             case ESearchColumnsTypes.NOTES: {
@@ -326,13 +401,13 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
                 const devStatusCacheItem = ObjectsCache.get(cacheKey)
                 if (devStatusCacheItem) {
                     devStatus = devStatusCacheItem.data as IJiraDevStatus
-                } else {
+                } else if (!offline) {
                     devStatus = await JiraClient.getDevStatus(issue.id, { account: issue.account })
                     ObjectsCache.add(cacheKey, devStatus)
                 }
                 const cell = createEl('td', { parent: row })
-                const prDetails = devStatus.summary.pullrequest.overall.details
-                if (prDetails.openCount + prDetails.mergedCount + prDetails.declinedCount > 0) {
+                const prDetails = devStatus?.summary.pullrequest.overall.details
+                if (prDetails && prDetails.openCount + prDetails.mergedCount + prDetails.declinedCount > 0) {
                     if (prDetails.openCount > 0) {
                         const prOpen = createSpan({ parent: cell, cls: `pull-request-tag pull-request-open ${RC.getTheme()}`, title: 'Open pull-request' })
                         setIcon(prOpen, 'jira-issue-git-pull-request')
@@ -398,19 +473,44 @@ function getEpicColor(key: string): string {
     return JIRA_EPIC_COLORS[index]
 }
 
-async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?: string; summary?: string; isParentFallback?: boolean } | null> {
+// Offline the lookup fails right away, so the callers fall back to what the issue already has
+async function lookupIssue(issueKey: string, issue: IJiraIssue, offline: boolean): Promise<IJiraIssue> {
+    if (offline) {
+        throw new Error('Jira lookups are skipped while showing saved results')
+    }
+    return getIssue(issueKey, { fields: ['*all'], account: issue.account })
+}
+
+function getEpicLinkFieldId(issue: IJiraIssue): string {
+    return issue.account?.cache?.customFieldsNameToId?.['EPIC LINK'] || issue.account?.cache?.customFieldsNameToId?.['Epic Link']
+}
+
+const ISSUE_KEY_VALUE_REGEX = /^[A-Za-z0-9_]+-\d+$/
+
+// The last fallback of resolveEpic: a custom field holding an issue key, or an object with one
+function isEpicReference(field: string, value: unknown): boolean {
+    if (!field.startsWith('customfield_') || !value) {
+        return false
+    }
+    if (typeof value === 'string') {
+        return ISSUE_KEY_VALUE_REGEX.test(value.trim())
+    }
+    const key = typeof value === 'object' ? (value as { key?: unknown }).key : null
+    return typeof key === 'string' && ISSUE_KEY_VALUE_REGEX.test(key)
+}
+
+async function resolveEpic(issue: IJiraIssue, depth = 0, offline = false): Promise<{ key?: string; summary?: string; isParentFallback?: boolean } | null> {
     if (!issue || !issue.fields || depth > 3) {
         return null
     }
 
     // 1. Check legacy Jira Server/Data Center customfield by ID if mapped
-    const customEpicFieldId = issue.account?.cache?.customFieldsNameToId['EPIC LINK'] || 
-                              issue.account?.cache?.customFieldsNameToId['Epic Link']
+    const customEpicFieldId = getEpicLinkFieldId(issue)
     if (customEpicFieldId && customEpicFieldId !== 'VIRTUAL_EPIC_NAME' && issue.fields[`customfield_${customEpicFieldId}`]) {
         const epicVal = issue.fields[`customfield_${customEpicFieldId}`]
         if (typeof epicVal === 'string') {
             try {
-                const epicIssue = await getIssue(epicVal, { fields: ['*all'], account: issue.account })
+                const epicIssue = await lookupIssue(epicVal, issue, offline)
                 return { key: epicVal, summary: epicIssue?.fields?.summary || epicVal }
             } catch {
                 return { key: epicVal }
@@ -441,9 +541,9 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
             }
             // Fetch parent Story/Task details (cached in ObjectsCache) and recursively resolve its Epic
             try {
-                const parentStory = await getIssue(parent.key, { fields: ['*all'], account: issue.account })
+                const parentStory = await lookupIssue(parent.key, issue, offline)
                 if (parentStory) {
-                    const parentEpic = await resolveEpic(parentStory, depth + 1)
+                    const parentEpic = await resolveEpic(parentStory, depth + 1, offline)
                     if (parentEpic && !parentEpic.isParentFallback) {
                         return parentEpic
                     }
@@ -461,25 +561,21 @@ async function resolveEpic(issue: IJiraIssue, depth: number = 0): Promise<{ key?
 
     // 4. Scan all customfields for any Epic key or Epic object (Fallback for unmapped Jira Server / Data Center)
     for (const [key, val] of Object.entries(issue.fields)) {
-        if (!key.startsWith('customfield_') || !val) continue
+        if (!isEpicReference(key, val)) continue
 
-        if (typeof val === 'string' && /^[A-Za-z0-9_]+-\d+$/.test(val.trim())) {
+        if (typeof val === 'string') {
             const epicKey = val.trim()
             try {
-                const fetchedEpic = await getIssue(epicKey, { fields: ['*all'], account: issue.account })
+                const fetchedEpic = await lookupIssue(epicKey, issue, offline)
                 if (fetchedEpic && fetchedEpic.fields) {
                     return { key: epicKey, summary: fetchedEpic.fields.summary || epicKey }
                 }
             } catch {
                 return { key: epicKey }
             }
-        }
-
-        if (typeof val === 'object' && val !== null && (val as any).key) {
+        } else {
             const obj = val as any
-            if (typeof obj.key === 'string' && /^[A-Za-z0-9_]+-\d+$/.test(obj.key)) {
-                return { key: obj.key, summary: obj.summary || obj.name || obj.key }
-            }
+            return { key: obj.key, summary: obj.summary || obj.name || obj.key }
         }
     }
 
@@ -490,17 +586,38 @@ export const VIRTUAL_EPIC_ALIASES = ['EPIC', 'EPIC LINK', 'EPIC NAME', 'EPIC_LIN
 export const VIRTUAL_PARENT_ALIASES = ['PARENT', 'PARENT LINK', 'PARENT NAME', 'PARENT_LINK', 'PARENT_NAME']
 export const VIRTUAL_CUSTOM_FIELD_ALIASES = [...VIRTUAL_EPIC_ALIASES, ...VIRTUAL_PARENT_ALIASES]
 
-async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement): Promise<void> {
-    const rawField = customField
-    if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
-        customField = issue.account.cache.customFieldsNameToId[customField] || customField
-    }
+type CustomFieldColumn = { kind: 'EPIC' } | { kind: 'PARENT' } | { kind: 'FIELD', field: string }
 
-    const fieldUpper = rawField.toUpperCase()
+function resolveCustomFieldColumn(issue: IJiraIssue, customField: string): CustomFieldColumn {
+    let fieldId = customField
+    if (!Number(customField) && issue.account?.cache?.customFieldsNameToId) {
+        fieldId = issue.account.cache.customFieldsNameToId[customField] || customField
+    }
+    const fieldUpper = customField.toUpperCase()
+    if (fieldId === 'VIRTUAL_EPIC_NAME' || VIRTUAL_EPIC_ALIASES.includes(fieldUpper)) {
+        return { kind: 'EPIC' }
+    }
+    if (fieldId === 'VIRTUAL_PARENT' || VIRTUAL_PARENT_ALIASES.includes(fieldUpper)) {
+        return { kind: 'PARENT' }
+    }
+    return { kind: 'FIELD', field: `customfield_${fieldId}` }
+}
+
+// Columns of custom fields given by name (not by id, and not Epic or Parent) need the custom
+// field names loaded from Jira to find their field
+export function hasCustomFieldColumnsByName(columns: ISearchColumn[]): boolean {
+    return columns.some(column => column.type === ESearchColumnsTypes.CUSTOM_FIELD
+        && !!column.extra
+        && !Number(column.extra)
+        && !VIRTUAL_CUSTOM_FIELD_ALIASES.includes(column.extra.toUpperCase()))
+}
+
+async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cell: HTMLTableCellElement, offline: boolean): Promise<void> {
+    const customFieldColumn = resolveCustomFieldColumn(issue, customField)
 
     // 1. Epic Link / Epic Name virtual column
-    if (customField === 'VIRTUAL_EPIC_NAME' || VIRTUAL_EPIC_ALIASES.includes(fieldUpper)) {
-        const epic = await resolveEpic(issue)
+    if (customFieldColumn.kind === 'EPIC') {
+        const epic = await resolveEpic(issue, 0, offline)
         if (epic && (epic.key || epic.summary)) {
             const epicKey = epic.key
             const epicSummary = epic.summary
@@ -537,7 +654,7 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
     }
 
     // 2. Parent / Parent Link virtual column (immediate parent task/story)
-    if (customField === 'VIRTUAL_PARENT' || VIRTUAL_PARENT_ALIASES.includes(fieldUpper)) {
+    if (customFieldColumn.kind === 'PARENT') {
         if (issue.fields?.parent) {
             const parentKey = issue.fields.parent.key
             const parentSummary = issue.fields.parent.fields?.summary
@@ -562,7 +679,7 @@ async function renderCustomFieldCell(issue: IJiraIssue, customField: string, cel
         cell.setText('')
         return
     }
-    const value = issue.fields[`customfield_${customField}`]
+    const value = issue.fields[customFieldColumn.field]
     if (value === undefined || value === null) {
         cell.setText('')
         return

@@ -1,7 +1,7 @@
 import * as obsidian from 'obsidian'
 import JiraClient from '../src/client/jiraClient'
 import { TestAccountOpen } from './testData'
-import { SettingsData } from '../src/settings'
+import { DEFAULT_SETTINGS, SettingsData } from '../src/settings'
 
 const kIssueKey = 'AAA-123'
 const requestUrlMock = jest.spyOn(obsidian, 'requestUrl')
@@ -262,11 +262,157 @@ describe('JiraClient', () => {
             await expect(JiraClient.testConnection(TestAccountOpen))
                 .rejects.toEqual(new Error('Jira API 200 Error: Login required'))
         })
+
+        describe('request timeout', () => {
+            beforeEach(() => {
+                jest.useFakeTimers()
+                requestUrlMock.mockReturnValueOnce(new Promise(() => { }) as any)
+            })
+
+            afterEach(() => {
+                SettingsData.requestTimeout = DEFAULT_SETTINGS.requestTimeout
+                jest.useRealTimers()
+            })
+
+            test('getIssue fails when Jira does not answer in time', async () => {
+                SettingsData.requestTimeout = '5s'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 5 seconds')
+
+                await jest.advanceTimersByTimeAsync(5000)
+
+                await assertion
+            })
+
+            test('a number without unit means seconds', async () => {
+                SettingsData.requestTimeout = '30'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 30 seconds')
+
+                await jest.advanceTimersByTimeAsync(30000)
+
+                await assertion
+            })
+
+            test('a timeout under 1 second is raised to 1 second', async () => {
+                SettingsData.requestTimeout = '10ms'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 1 second')
+
+                await jest.advanceTimersByTimeAsync(1000)
+
+                await assertion
+            })
+
+            test('a timeout over the longest timer delay is lowered to it', async () => {
+                SettingsData.requestTimeout = '30d'
+                const settled = jest.fn()
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                issue.then(settled, settled)
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 25 days')
+
+                await jest.advanceTimersByTimeAsync(1000)
+                expect(settled).not.toHaveBeenCalled()
+                await jest.advanceTimersByTimeAsync(2 ** 31 - 1 - 1000)
+
+                await assertion
+            })
+
+            test('an invalid timeout falls back to the default', async () => {
+                SettingsData.requestTimeout = 'soon'
+                const issue = JiraClient.getIssue(kIssueKey, { account: TestAccountOpen })
+                const assertion = expect(issue).rejects.toThrow('Timeout: Jira did not answer within 20 seconds')
+
+                await jest.advanceTimersByTimeAsync(20000)
+
+                await assertion
+            })
+        })
     })
 
     test.todo('getIssue')
     test.todo('getSearchResults')
     test.todo('updateStatusColorCache')
+        test('customFieldsLoaded waits for the custom fields being loaded', async () => {
+            SettingsData.accounts = [TestAccountOpen]
+            let answer: (response: unknown) => void
+            requestUrlMock.mockReturnValueOnce(new Promise(resolve => { answer = resolve }) as any)
+            const loaded = jest.fn()
+
+            void JiraClient.updateCustomFieldsCache()
+            void JiraClient.customFieldsLoaded(TestAccountOpen).then(loaded)
+            await Promise.resolve()
+            expect(loaded).not.toHaveBeenCalled()
+
+            answer({ status: 200, headers: defaultHeaders, json: [] })
+            expect(await JiraClient.customFieldsLoaded(TestAccountOpen)).toEqual(true)
+            expect(loaded).toHaveBeenCalledWith(true)
+        })
+
+        describe('when the custom field names fail to load', () => {
+            const accountWithoutNames = (id: string) => ({
+                ...TestAccountOpen,
+                id,
+                cache: { ...TestAccountOpen.cache, customFieldsIdToName: {} as Record<string, string>, customFieldsNameToId: {} as Record<string, string>, customFieldsType: {} },
+            })
+            const forbidden = { status: 403, headers: defaultHeaders, json: {} } as any
+            const fields = { status: 200, headers: defaultHeaders, json: [{ custom: true, name: 'Team', schema: { customId: 10010 } }] } as any
+            let consoleError: jest.SpyInstance
+
+            beforeEach(() => {
+                consoleError = jest.spyOn(console, 'error').mockImplementation(() => null)
+            })
+
+            afterEach(() => {
+                consoleError.mockRestore()
+            })
+
+            test('customFieldsLoaded tells which accounts have no names', async () => {
+                const failingAccount = accountWithoutNames('failing')
+                const workingAccount = accountWithoutNames('working')
+                SettingsData.accounts = [failingAccount, workingAccount]
+                requestUrlMock
+                    .mockReturnValueOnce(forbidden)
+                    .mockReturnValueOnce(fields)
+                    .mockReturnValueOnce(forbidden)
+
+                await JiraClient.updateCustomFieldsCache()
+
+                expect(await JiraClient.customFieldsLoaded(failingAccount)).toEqual(false)
+                expect(await JiraClient.customFieldsLoaded(workingAccount)).toEqual(true)
+            })
+
+            test('customFieldsLoaded loads the names again, once for parallel calls', async () => {
+                const account = accountWithoutNames('retry')
+                SettingsData.accounts = [account]
+                requestUrlMock
+                    .mockReturnValueOnce(forbidden)
+                    .mockReturnValueOnce(fields)
+                await JiraClient.updateCustomFieldsCache()
+
+                const loaded = await Promise.all([JiraClient.customFieldsLoaded(account), JiraClient.customFieldsLoaded(account)])
+
+                expect(loaded).toEqual([true, true])
+                expect(account.cache.customFieldsNameToId['Team']).toEqual('10010')
+                expect(await JiraClient.customFieldsLoaded(account)).toEqual(true)
+                expect(requestUrlMock).toHaveBeenCalledTimes(2)
+            })
+
+            test('names of an earlier load still count when loading them again fails', async () => {
+                const account = accountWithoutNames('reload')
+                SettingsData.accounts = [account]
+                requestUrlMock
+                    .mockReturnValueOnce(fields)
+                    .mockReturnValueOnce(forbidden)
+                await JiraClient.updateCustomFieldsCache()
+
+                await JiraClient.updateCustomFieldsCache()
+
+                expect(await JiraClient.customFieldsLoaded(account)).toEqual(true)
+                expect(account.cache.customFieldsNameToId['Team']).toEqual('10010')
+            })
+        })
+
         test('updateCustomFieldsCache populates virtual EPIC NAME mapping', async () => {
             SettingsData.accounts = [TestAccountOpen]
             requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: [] } as any)

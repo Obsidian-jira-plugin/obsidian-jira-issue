@@ -1,6 +1,8 @@
+import moment from "moment"
 import { FrontMatterCache, TFile } from "obsidian"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
 import { EColorSchema, ERenderStyle, IJiraIssueAccountSettings } from "../interfaces/settingsInterfaces"
+import LastGoodCache, { LastGoodItem } from "../lastGoodCache"
 import { ObsidianApp } from "../main"
 import { SearchView } from "../searchView"
 import { SettingsData } from "../settings"
@@ -36,6 +38,11 @@ export const JIRA_STATUS_COLOR_MAP_BY_NAME: Record<string, string> = {
     'Testing': 'is-info',
     'Release Pending': 'is-success',
     'Closed': 'is-success'
+}
+
+export interface IStaleInfo {
+    updateTime: number
+    error: unknown
 }
 
 function resolveWebBaseUrl(account: IJiraIssueAccountSettings): string {
@@ -171,6 +178,72 @@ export default {
         createSpan({ cls: 'ji-tag is-danger is-light', text: issueKey, parent: tagsRow })
         createSpan({ cls: 'ji-tag is-danger', text: message, parent: tagsRow })
         return tagsRow
+    },
+
+    // Keep showing the last data fetched successfully, flagged as stale, instead of the error.
+    // Saved data that cannot be rendered falls back to the error, also when rendering is async
+    renderSavedOrError<T, R>(lastGood: LastGoodItem<T>, error: unknown, renderSaved: (data: T, stale: IStaleInfo) => R, renderError: () => R): R {
+        if (lastGood) {
+            try {
+                const rendered = renderSaved(lastGood.data, { updateTime: lastGood.updateTime, error })
+                return rendered instanceof Promise ? rendered.catch(() => renderError()) as unknown as R : rendered
+            } catch {
+                // Falls back to the error below
+            }
+        }
+        return renderError()
+    },
+
+    renderIssueFailure(issueKey: string, error: unknown, compact = false, cacheKey = issueKey): HTMLElement {
+        return this.renderSavedOrError(LastGoodCache.getIssue(cacheKey), error,
+            (issue: IJiraIssue, stale: IStaleInfo) => {
+                const tagsRow = this.renderIssue(issue, compact)
+                this.renderStaleMarker(tagsRow, 'this issue', stale)
+                return tagsRow
+            },
+            () => this.renderIssueError(issueKey, error as string))
+    },
+
+    // For an issue Jira returned: if it cannot be rendered, the error is shown, not the saved
+    // issue, since Jira did answer. onRendered (saving the issue) only runs after a render
+    renderIssueOrError(issueKey: string, issue: IJiraIssue, compact = false, onRendered: () => void = null): HTMLElement {
+        let tagsRow: HTMLElement
+        try {
+            tagsRow = this.renderIssue(issue, compact)
+        } catch (err) {
+            return this.renderIssueError(issueKey, String(err))
+        }
+        this.saveRendered(onRendered)
+        return tagsRow
+    },
+
+    // Runs after a successful render. A failed save is only logged, so content that rendered
+    // fine is not replaced by an error
+    saveRendered(save: () => void): void {
+        try {
+            save?.()
+        } catch (err) {
+            this.logSaveError(err)
+        }
+    },
+
+    logSaveError(err: unknown): void {
+        console.warn('JiraIssue: unable to save the data for offline use', err)
+    },
+
+    formatUpdateTime(updateTime: number): string {
+        return moment(updateTime).format('llll')
+    },
+
+    renderStaleMarker(parent: HTMLElement, subject: string, stale: IStaleInfo): HTMLElement {
+        const reason = stale.error instanceof Error ? stale.error.message : String(stale.error)
+        const marker = createSpan({
+            cls: 'ji-tag is-warning ji-stale-marker',
+            text: '!',
+            attr: { 'aria-label': `Could not refresh ${subject}. Showing data from ${this.formatUpdateTime(stale.updateTime)}.\n\n${reason}` },
+        })
+        parent.prepend(marker)
+        return marker
     },
 
     renderAccountColorBand(account: IJiraIssueAccountSettings, parent: HTMLDivElement) {

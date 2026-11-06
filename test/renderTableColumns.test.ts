@@ -2,11 +2,15 @@ jest.mock('escape-string-regexp', () => (s: string) => s)
 jest.mock('../src/main', () => ({
     ObsidianApp: { vault: { getConfig: jest.fn() } }
 }))
+jest.mock('../src/api/apiBase', () => ({ getIssue: jest.fn() }))
+jest.mock('../src/client/jiraClient', () => ({ __esModule: true, default: { getDevStatus: jest.fn() } }))
 
-import { formatCopyTemplate, renderTableColumn } from '../src/rendering/renderTableColumns'
+import { getIssue } from '../src/api/apiBase'
+import JiraClient from '../src/client/jiraClient'
+import { formatCopyTemplate, hasCustomFieldColumnsByName, renderTableColumn, trimIssueForColumns } from '../src/rendering/renderTableColumns'
 import { SettingsData } from '../src/settings'
 import { ESearchColumnsTypes, ISearchColumn } from '../src/interfaces/settingsInterfaces'
-import { IJiraIssue } from '../src/interfaces/issueInterfaces'
+import { IJiraIssue, toDefaultedIssue } from '../src/interfaces/issueInterfaces'
 import { TestAccountOpen } from './testData'
 
 describe('renderTableColumns', () => {
@@ -32,6 +36,11 @@ describe('renderTableColumns', () => {
             }
             return el
         }
+        ;(global as any).createSpan = (options: any = {}) => (global as any).createEl('span', options)
+    })
+
+    afterEach(() => {
+        jest.clearAllMocks()
     })
 
     const originalPrefix = SettingsData.inlineIssuePrefix
@@ -142,5 +151,179 @@ describe('renderTableColumns', () => {
         const issue = { key: 'TASK-1', fields: {}, account: TestAccountOpen } as any
 
         expect(formatCopyTemplate('{constructor}{__proto__}{toString}', issue)).toEqual('{constructor}{__proto__}{toString}')
+    })
+
+    describe('offline (saved results shown while Jira is unreachable)', () => {
+        const epicLinkIssue = (): IJiraIssue => ({
+            id: '10003',
+            key: 'TASK-3',
+            fields: {
+                summary: 'Task summary',
+                customfield_10014: 'EPIC-7',
+            } as any,
+            account: {
+                ...TestAccountOpen,
+                cache: {
+                    ...TestAccountOpen.cache,
+                    customFieldsNameToId: { 'EPIC LINK': '10014' }
+                }
+            }
+        })
+        const epicLinkColumns: ISearchColumn[] = [
+            { type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: 'EPIC LINK' }
+        ]
+
+        test('looks up the Epic summary when online', async () => {
+            (getIssue as jest.Mock).mockResolvedValueOnce({ fields: { summary: 'Epic summary' } })
+
+            const row = { cells: [] } as any
+            await renderTableColumn(epicLinkColumns, epicLinkIssue(), row)
+
+            expect(getIssue).toHaveBeenCalledTimes(1)
+            expect(row.cells[0].children[0].text).toEqual('EPIC-7: Epic summary')
+        })
+
+        test('shows the Epic key without looking it up', async () => {
+            const row = { cells: [] } as any
+            await renderTableColumn(epicLinkColumns, epicLinkIssue(), row, true)
+
+            expect(getIssue).not.toHaveBeenCalled()
+            expect(row.cells[0].children[0].text).toEqual('EPIC-7')
+        })
+
+        test('shows the assignee name from trimmed results in a compact column', async () => {
+            const columns: ISearchColumn[] = [{ type: ESearchColumnsTypes.ASSIGNEE, compact: true, extra: '' }]
+            const issue = trimIssueForColumns({
+                ...epicLinkIssue(),
+                fields: { assignee: { displayName: 'Jane Doe', emailAddress: 'jane@example.com', avatarUrls: { '16x16': 'data:image/png;base64,AAAA' } } } as any,
+            }, columns)
+
+            const row = { cells: [] } as any
+            await renderTableColumn(columns, toDefaultedIssue({ ...issue, account: TestAccountOpen }), row, true)
+
+            expect(row.cells[0].textContent).toEqual('Jane Doe')
+        })
+
+        test('shows the Epic key found in a custom field without an Epic Link mapping', async () => {
+            const issue: IJiraIssue = {
+                id: '10006',
+                key: 'TASK-6',
+                fields: {
+                    summary: 'Task summary',
+                    customfield_10100: 'Some text',
+                    customfield_10200: 'EPIC-9',
+                    customfield_10300: { key: 'EPIC-8', summary: 'Epic summary', self: 'https://host/rest/api/2/issue/10008', colorKey: 'blue' },
+                } as any,
+                account: TestAccountOpen,
+            }
+            const trimmed = trimIssueForColumns(issue, epicLinkColumns)
+
+            expect(trimmed.fields).toEqual({
+                customfield_10200: 'EPIC-9',
+                customfield_10300: { key: 'EPIC-8', summary: 'Epic summary' },
+            })
+
+            const row = { cells: [] } as any
+            await renderTableColumn(epicLinkColumns, { ...trimmed, account: TestAccountOpen }, row, true)
+
+            expect(getIssue).not.toHaveBeenCalled()
+            expect(row.cells[0].children[0].text).toEqual('EPIC-9')
+        })
+
+        test('shows no dev status instead of fetching it', async () => {
+            const row = { cells: [] } as any
+            await renderTableColumn([{ type: ESearchColumnsTypes.DEV_STATUS, compact: false, extra: '' }], epicLinkIssue(), row, true)
+
+            expect(JiraClient.getDevStatus).not.toHaveBeenCalled()
+            expect(row.cells[0].children[0].textContent).toEqual('-')
+        })
+    })
+
+    describe('trimIssueForColumns', () => {
+        test('keeps only the fields the columns render, and people by name only', () => {
+            const parent = { key: 'EPIC-1', fields: { summary: 'Epic summary' } }
+            const issue = {
+                id: '10004',
+                key: 'TASK-4',
+                account: {
+                    ...TestAccountOpen,
+                    cache: { ...TestAccountOpen.cache, customFieldsNameToId: { 'EPIC LINK': '10014', 'Story Points': '10016' } },
+                },
+                fields: {
+                    summary: 'Task summary',
+                    description: 'Not shown by any column',
+                    status: { name: 'Done', statusCategory: { colorName: 'green' } },
+                    reporter: { displayName: 'Jane Doe', emailAddress: 'jane@example.com', accountId: '712020:abc', avatarUrls: { '16x16': 'data:image/png;base64,AAAA' } },
+                    comment: { comments: [{ body: 'Not shown either' }] },
+                    parent,
+                    customfield_10014: 'EPIC-7',
+                    customfield_10016: 5,
+                    customfield_10099: 'Unused custom field',
+                },
+            } as any
+            const columns: ISearchColumn[] = [
+                { type: ESearchColumnsTypes.KEY, compact: false, extra: '' },
+                { type: ESearchColumnsTypes.SUMMARY, compact: false, extra: '' },
+                { type: ESearchColumnsTypes.STATUS, compact: false, extra: '' },
+                { type: ESearchColumnsTypes.REPORTER, compact: true, extra: '' },
+                { type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: 'EPIC LINK' },
+                { type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: 'Story Points' },
+            ]
+
+            expect(trimIssueForColumns(issue, columns)).toEqual({
+                id: '10004',
+                key: 'TASK-4',
+                account: null,
+                fields: {
+                    summary: 'Task summary',
+                    status: { name: 'Done', statusCategory: { colorName: 'green' } },
+                    reporter: { displayName: 'Jane Doe' },
+                    parent,
+                    customfield_10014: 'EPIC-7',
+                    customfield_10016: 5,
+                },
+            })
+        })
+
+        test('keeps what the copy column template can use, people by name only', () => {
+            const issue = {
+                id: '10005',
+                key: 'TASK-5',
+                account: TestAccountOpen,
+                fields: {
+                    summary: 'Fix login',
+                    description: 'Not used by the copy column',
+                    status: { name: 'Done' },
+                    labels: ['backend'],
+                    assignee: { displayName: 'Jane Doe', emailAddress: 'jane@example.com' },
+                },
+            } as any
+
+            const trimmed = trimIssueForColumns(issue, [{ type: ESearchColumnsTypes.COPY_TO_CLIPBOARD, compact: false, extra: '' }])
+
+            expect(trimmed.fields).toEqual({
+                summary: 'Fix login',
+                status: { name: 'Done' },
+                labels: ['backend'],
+                assignee: { displayName: 'Jane Doe' },
+            })
+            expect(formatCopyTemplate('{key} {summary} [{status}] {assignee}', { ...trimmed, account: TestAccountOpen })).toEqual('TASK-5 Fix login [Done] Jane Doe')
+        })
+    })
+
+    describe('hasCustomFieldColumnsByName', () => {
+        const customField = (extra: string): ISearchColumn => ({ type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra })
+
+        test('is true for a custom field column given by name', () => {
+            expect(hasCustomFieldColumnsByName([{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }, customField('Team')])).toEqual(true)
+        })
+
+        test('is false for custom field columns given by id, Epic or Parent', () => {
+            expect(hasCustomFieldColumnsByName([customField('10010'), customField('Epic Link'), customField('PARENT')])).toEqual(false)
+        })
+
+        test('is false without custom field columns', () => {
+            expect(hasCustomFieldColumnsByName([{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }])).toEqual(false)
+        })
     })
 })

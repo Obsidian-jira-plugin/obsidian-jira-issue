@@ -1,6 +1,7 @@
 import { MarkdownPostProcessorContext } from "obsidian"
 import { IJiraIssue } from "../interfaces/issueInterfaces"
 import JiraClient from "../client/jiraClient"
+import LastGoodCache from "../lastGoodCache"
 import ObjectsCache from "../objectsCache"
 import RC from "./renderingCommon"
 import { COMMENT_REGEX, JIRA_KEY_REGEX } from "../interfaces/settingsInterfaces"
@@ -47,20 +48,21 @@ export const IssueFenceRenderer = async (source: string, el: HTMLElement, ctx: M
             const cachedIssue = ObjectsCache.get(issueKey)
             if (cachedIssue) {
                 if (cachedIssue.isError) {
-                    renderedItems[issueKey] = RC.renderIssueError(issueKey, cachedIssue.data as string)
+                    renderedItems[issueKey] = RC.renderIssueFailure(issueKey, cachedIssue.data)
                 } else {
-                    renderedItems[issueKey] = RC.renderIssue(cachedIssue.data as IJiraIssue)
+                    renderedItems[issueKey] = RC.renderIssueOrError(issueKey, cachedIssue.data as IJiraIssue)
                 }
             } else {
                 // console.log(`Issue not available in the cache`)
                 renderedItems[issueKey] = RC.renderLoadingItem(issueKey)
+                const generation = LastGoodCache.generation()
                 JiraClient.getIssue(issueKey).then(newIssue => {
                     const issue = ObjectsCache.add(issueKey, newIssue).data as IJiraIssue
-                    renderedItems[issueKey] = RC.renderIssue(issue)
+                    renderedItems[issueKey] = RC.renderIssueOrError(issueKey, issue, false, () => LastGoodCache.rememberIssue(issueKey, issue, generation))
                     updateRenderedIssues(el, renderedItems)
-                }).catch(err => {
+                }, err => {
                     ObjectsCache.add(issueKey, err, true)
-                    renderedItems[issueKey] = RC.renderIssueError(issueKey, err)
+                    renderedItems[issueKey] = RC.renderIssueFailure(issueKey, err)
                     updateRenderedIssues(el, renderedItems)
                 })
             }

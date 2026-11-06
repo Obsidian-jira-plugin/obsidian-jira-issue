@@ -11,8 +11,12 @@ jest.mock('../src/settings', () => {
         }
     }
 })
+jest.mock('../src/lastGoodCache', () => {
+    return { __esModule: true, default: { getIssue: jest.fn() } }
+})
 
 import { SettingsData } from '../src/settings'
+import LastGoodCache from '../src/lastGoodCache'
 import RC, { JIRA_DEFAULT_ISSUE_ICON, JIRA_DEFAULT_PRIORITY_ICON, JIRA_ISSUE_TYPE_ICON_MAP, JIRA_PRIORITY_ICON_MAP } from '../src/rendering/renderingCommon'
 import { EColorSchema } from '../src/interfaces/settingsInterfaces'
 import * as main from '../src/main'
@@ -28,6 +32,7 @@ interface FakeElement {
     attributes: Record<string, string>
     children: FakeElement[]
     appendChild: (child: FakeElement) => FakeElement
+    prepend: (child: FakeElement) => void
     onNodeInserted: jest.Mock
 }
 
@@ -44,6 +49,9 @@ function createFakeElement(options: any = {}): FakeElement {
         appendChild(child: FakeElement) {
             this.children.push(child)
             return child
+        },
+        prepend(child: FakeElement) {
+            this.children.unshift(child)
         },
         onNodeInserted: jest.fn(),
     }
@@ -135,6 +143,108 @@ describe('RenderingCommon', () => {
 
             expect(renderedIssue.children.some(child => child.className.includes('issue-summary'))).toEqual(false)
             expect(renderedIssue.children.some(child => child.className.includes('issue-status'))).toEqual(true)
+        })
+    })
+
+    describe('renderIssueFailure', () => {
+        const issue = {
+            key: 'AAA-123',
+            account: TestAccountOpen,
+            fields: {
+                issuetype: { iconUrl: null, name: 'Task' },
+                summary: 'Last known summary',
+                status: { name: 'In Progress', description: '', statusCategory: { colorName: 'yellow' } },
+            },
+        } as any
+        const updateTime = Date.UTC(2026, 9, 22, 9, 41)
+        const getIssueMock = LastGoodCache.getIssue as jest.Mock
+
+        test('renders the error when the issue was never fetched successfully', () => {
+            getIssueMock.mockReturnValueOnce(null)
+
+            const rendered = RC.renderIssueFailure('AAA-123', new Error('Forbidden')) as any as FakeElement
+
+            expect(rendered.children[0].className).toContain('is-delete')
+            expect(rendered.children.some(child => child.className.includes('ji-stale-marker'))).toEqual(false)
+        })
+
+        test('renders the last good issue behind a ! marker explaining the error', () => {
+            getIssueMock.mockReturnValueOnce({ updateTime, data: issue })
+
+            const rendered = RC.renderIssueFailure('AAA-123', new Error('Forbidden: no access')) as any as FakeElement
+            const marker = rendered.children[0]
+            const summary = rendered.children.find(child => child.className.includes('issue-summary'))
+
+            expect(marker.className).toEqual('ji-tag is-warning ji-stale-marker')
+            expect(marker.textContent).toEqual('!')
+            expect(marker.attributes['aria-label']).toEqual(
+                `Could not refresh this issue. Showing data from ${RC.formatUpdateTime(updateTime)}.\n\nForbidden: no access`
+            )
+            expect(summary.attributes['aria-label']).toEqual('Last known summary')
+        })
+
+        test('looks the saved issue up by the cache key of the chip', () => {
+            getIssueMock.mockReturnValueOnce(null)
+
+            RC.renderIssueFailure('AAA-123', new Error('Forbidden'), false, 'https://host/browse/AAA-123')
+
+            expect(getIssueMock).toHaveBeenCalledWith('https://host/browse/AAA-123')
+        })
+
+        test('renders the error when the saved issue cannot be rendered', () => {
+            getIssueMock.mockReturnValueOnce({ updateTime, data: { key: 'AAA-123', account: TestAccountOpen, fields: {} } })
+
+            const rendered = RC.renderIssueFailure('AAA-123', new Error('Forbidden')) as any as FakeElement
+
+            expect(rendered.children[0].className).toContain('is-delete')
+        })
+
+        test('renders the error when saved data rendered asynchronously fails', async () => {
+            const renderError = jest.fn(async () => 'error')
+
+            const rendered = await RC.renderSavedOrError({ updateTime, data: {} }, new Error('Forbidden'), async () => { throw new Error('Cannot render') }, renderError)
+
+            expect(rendered).toEqual('error')
+            expect(renderError).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    describe('renderIssueOrError', () => {
+        const getIssueMock = LastGoodCache.getIssue as jest.Mock
+
+        test('renders the issue Jira returned, then runs onRendered', () => {
+            const onRendered = jest.fn()
+            const issue = { key: 'AAA-123', account: TestAccountOpen, fields: { issuetype: { iconUrl: null, name: 'Task' }, summary: 'Summary', status: { name: 'Done', statusCategory: { colorName: 'green' } } } } as any
+
+            const rendered = RC.renderIssueOrError('AAA-123', issue, false, onRendered) as any as FakeElement
+
+            expect(rendered.children.some(child => child.className.includes('issue-summary'))).toEqual(true)
+            expect(onRendered).toHaveBeenCalledTimes(1)
+        })
+
+        test('keeps the rendered issue when saving it fails', () => {
+            const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
+            const issue = { key: 'AAA-123', account: TestAccountOpen, fields: { issuetype: { iconUrl: null, name: 'Task' }, summary: 'Summary', status: { name: 'Done', statusCategory: { colorName: 'green' } } } } as any
+            try {
+                const rendered = RC.renderIssueOrError('AAA-123', issue, false, () => { throw new Error('Cannot save') }) as any as FakeElement
+
+                expect(rendered.children.some(child => child.className.includes('issue-summary'))).toEqual(true)
+                expect(rendered.children.some(child => child.className.includes('is-delete'))).toEqual(false)
+                expect(warn).toHaveBeenCalledTimes(1)
+            } finally {
+                warn.mockRestore()
+            }
+        })
+
+        test('renders the error, not the saved issue, when the issue Jira returned cannot be rendered', () => {
+            const onRendered = jest.fn()
+
+            const rendered = RC.renderIssueOrError('AAA-123', { key: 'AAA-123', account: TestAccountOpen, fields: {} } as any, false, onRendered) as any as FakeElement
+
+            expect(rendered.children[0].className).toContain('is-delete')
+            expect(rendered.children.some(child => child.className.includes('ji-stale-marker'))).toEqual(false)
+            expect(getIssueMock).not.toHaveBeenCalled()
+            expect(onRendered).not.toHaveBeenCalled()
         })
     })
 
