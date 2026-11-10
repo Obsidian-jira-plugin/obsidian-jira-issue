@@ -131,7 +131,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         }
         let generatedAccountIds = false
         for (let i = 0; i < SettingsData.accounts.length; i++) {
-            SettingsData.accounts[i] = Object.assign({}, DEFAULT_ACCOUNT, SettingsData.accounts[i])
+            SettingsData.accounts[i] = Object.assign({}, DEFAULT_ACCOUNT, { cache: deepCopy(DEFAULT_ACCOUNT.cache) }, SettingsData.accounts[i])
             if (!SettingsData.accounts[i].id) {
                 SettingsData.accounts[i].id = generateAccountId()
                 generatedAccountIds = true
@@ -154,14 +154,14 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                         bareToken: SettingsData.bareToken,
                         alias: DEFAULT_ACCOUNT.alias,
                         color: DEFAULT_ACCOUNT.color,
-                        cache: DEFAULT_ACCOUNT.cache,
+                        cache: deepCopy(DEFAULT_ACCOUNT.cache),
                         use2025Api: false,
                         disableImageFetch: DEFAULT_ACCOUNT.disableImageFetch,
                     }
                 ]
             } else {
                 // First installation
-                const defaultAcc = Object.assign({}, DEFAULT_ACCOUNT, { id: generateAccountId() })
+                const defaultAcc = Object.assign({}, DEFAULT_ACCOUNT, { id: generateAccountId(), cache: deepCopy(DEFAULT_ACCOUNT.cache) })
                 SettingsData.accounts = [defaultAcc]
             }
             await this.saveSettings()
@@ -235,7 +235,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         })
         // Account cache settings cleanup
         settingsToStore.accounts = deepCopy(SettingsData.accounts)
-        settingsToStore.accounts.forEach(account => account.cache = DEFAULT_ACCOUNT.cache)
+        settingsToStore.accounts.forEach(account => account.cache = deepCopy(DEFAULT_ACCOUNT.cache))
 
         if (SettingsData.credentialStorageType === ECredentialStorageType.KEYCHAIN) {
             if (isSecretStorageAvailable(this.app)) {
@@ -641,6 +641,10 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     this._showPassword = false
                     // Swap priority with another existing account
                     SettingsData.accounts.find(a => a.priority === newAccount.priority).priority = prevAccount.priority
+                    // Custom field names and status colors belong to the old host
+                    if (newAccount.host !== prevAccount.host) {
+                        newAccount.cache = deepCopy(DEFAULT_ACCOUNT.cache)
+                    }
                     Object.assign(prevAccount, newAccount)
                     this.accountsConflictsFix()
                     await this.saveSettings()
