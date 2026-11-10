@@ -71,6 +71,35 @@ describe('Settings', () => {
             accounts: [{ ...DEFAULT_ACCOUNT, id: expect.any(String) }],
         })
     })
+    describe('account cache is not shared with the defaults', () => {
+        // Custom field names written into a shared cache would show up in every account created later
+        test('first installation', async () => {
+            pluginMock.loadData.mockReturnValueOnce({})
+            await settingTab.loadSettings()
+            expect(SettingsData.accounts[0].cache).toEqual(DEFAULT_ACCOUNT.cache)
+            expect(SettingsData.accounts[0].cache).not.toBe(DEFAULT_ACCOUNT.cache)
+        })
+
+        test('migration of the legacy single account settings', async () => {
+            pluginMock.loadData.mockReturnValueOnce({ host: 'https://legacy.example.com', authenticationType: EAuthenticationTypes.OPEN })
+            await settingTab.loadSettings()
+            expect(SettingsData.accounts[0].host).toEqual('https://legacy.example.com')
+            expect(SettingsData.accounts[0].cache).toEqual(DEFAULT_ACCOUNT.cache)
+            expect(SettingsData.accounts[0].cache).not.toBe(DEFAULT_ACCOUNT.cache)
+            // loadSettings only adds to SettingsData, the legacy fields would leak into the next tests
+            delete SettingsData.host
+            delete SettingsData.authenticationType
+        })
+
+        test('stored settings', async () => {
+            pluginMock.loadData.mockReturnValueOnce({})
+            await settingTab.loadSettings()
+            pluginMock.saveData.mockClear()
+            await settingTab.saveSettings()
+            expect(pluginMock.saveData.mock.calls[0][0].accounts[0].cache).not.toBe(DEFAULT_ACCOUNT.cache)
+        })
+    })
+
     test('loadSettings valid full settings', async () => {
         pluginMock.loadData.mockReturnValueOnce(deepCopy(StoredSettings))
         await settingTab.loadSettings()

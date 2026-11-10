@@ -1,8 +1,8 @@
 import ms from 'ms'
 import { Platform, requestUrl, RequestUrlParam, RequestUrlResponse } from 'obsidian'
 import { AVATAR_RESOLUTION, EAuthenticationTypes, IJiraIssueAccountSettings } from '../interfaces/settingsInterfaces'
-import { ESprintState, IJiraAutocompleteField, IJiraBoard, IJiraDevStatus, IJiraField, IJiraIssue, IJiraSearchResults, IJiraSprint, IJiraStatus, IJiraUser } from '../interfaces/issueInterfaces'
-import { DEFAULT_SETTINGS, SettingsData } from "../settings"
+import { ESprintState, IJiraAutocompleteField, IJiraBoard, IJiraDevStatus, IJiraField, IJiraFieldSchema, IJiraIssue, IJiraSearchResults, IJiraSprint, IJiraStatus, IJiraUser } from '../interfaces/issueInterfaces'
+import { DEFAULT_ACCOUNT, DEFAULT_SETTINGS, SettingsData } from "../settings"
 import { getIssueTypeIconUrl, getPriorityIconUrl } from '../rendering/jiraIcons'
 
 interface RequestOptions {
@@ -305,94 +305,170 @@ async function fetchIssueImages(issue: IJiraIssue) {
     }
 }
 
-// Resolves to the accounts whose custom field names are not known: loading them failed and
-// no names of an earlier load are left
-let customFieldsUpdate: Promise<Set<IJiraIssueAccountSettings>> = Promise.resolve(new Set())
-// Loads started again for those accounts, one per account at a time
-const customFieldsRetries = new Map<IJiraIssueAccountSettings, Promise<boolean>>()
+// A failed load of the custom field names is tried again at most this often per account,
+// so an account whose /field keeps failing doesn't send a request on every render
+const CUSTOM_FIELDS_RETRY_INTERVAL_MS = 60 * 1000
+
+interface ICustomFieldsState {
+    // The names of the account are known, from this load or an earlier one
+    loaded: boolean
+    loading: Promise<boolean> | null
+    lastAttempt: number
+    // Names loaded for another host don't count, e.g. after the host of the account was changed
+    host: string
+}
+
+// One entry per account, replaced as a whole when a full update starts. Loads started for an
+// older set don't change names or column suggestions anymore once they finish
+let customFieldsStates = new Map<IJiraIssueAccountSettings, ICustomFieldsState>()
+let customFieldsUpdate: Promise<void> = Promise.resolve()
 
 function hasCustomFieldNames(account: IJiraIssueAccountSettings): boolean {
-    return Object.keys(account.cache.customFieldsNameToId || {}).length > 0
+    return Object.keys(account.cache?.customFieldsNameToId || {}).length > 0
+}
+
+// Builds the new maps first, so a response that can't be read leaves the names of an earlier load untouched
+function applyAccountCustomFields(account: IJiraIssueAccountSettings, response: IJiraField[]): void {
+    const idToName: Record<string, string> = {}
+    const nameToId: Record<string, string> = {}
+    const types: Record<string, IJiraFieldSchema> = {}
+    for (const i in response) {
+        const field = response[i]
+        if (field.custom && field.schema && field.schema.customId && typeof field.name === 'string') {
+            idToName[field.schema.customId] = field.name
+            nameToId[field.name] = field.schema.customId.toString()
+            types[field.schema.customId] = field.schema
+        }
+    }
+    // Virtual field mapping for deprecated Epic fields and Parent fields (only if not provided by Jira server)
+    if (!nameToId['EPIC NAME']) nameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
+    if (!nameToId['Epic Name']) nameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
+    if (!nameToId['EPIC LINK']) nameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
+    if (!nameToId['Epic Link']) nameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
+    idToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
+
+    if (!nameToId['PARENT']) nameToId['PARENT'] = 'VIRTUAL_PARENT'
+    if (!nameToId['Parent']) nameToId['Parent'] = 'VIRTUAL_PARENT'
+    if (!nameToId['PARENT LINK']) nameToId['PARENT LINK'] = 'VIRTUAL_PARENT'
+    if (!nameToId['Parent Link']) nameToId['Parent Link'] = 'VIRTUAL_PARENT'
+    idToName['VIRTUAL_PARENT'] = 'PARENT'
+
+    if (!account.cache) {
+        account.cache = JSON.parse(JSON.stringify(DEFAULT_ACCOUNT.cache))
+    }
+    account.cache.customFieldsIdToName = idToName
+    account.cache.customFieldsNameToId = nameToId
+    account.cache.customFieldsType = types
+}
+
+// Also used for names of an earlier load, as a full update starts with empty suggestions
+function addColumnSuggestions(account: IJiraIssueAccountSettings): void {
+    for (const [id, name] of Object.entries(account.cache?.customFieldsIdToName || {})) {
+        if (!id.startsWith('VIRTUAL_')) {
+            SettingsData.cache.columns.push(id, String(name).toUpperCase())
+        }
+    }
+}
+
+function isCurrent(states: Map<IJiraIssueAccountSettings, ICustomFieldsState>, account: IJiraIssueAccountSettings, state: ICustomFieldsState): boolean {
+    return states === customFieldsStates && account.host === state.host
 }
 
 // true when the names of this account are known afterwards, from this load or an earlier one
-async function fetchAccountCustomFields(account: IJiraIssueAccountSettings): Promise<boolean> {
-    try {
-        const response = await sendRequest(
-            {
-                method: 'GET',
-                path: `/field`,
-                account: account,
-            }
-        ) as IJiraField[]
-        account.cache.customFieldsIdToName = {}
-        account.cache.customFieldsNameToId = {}
-        account.cache.customFieldsType = {}
-        for (const i in response) {
-            const field = response[i]
-            if (field.custom && field.schema && field.schema.customId) {
-                account.cache.customFieldsIdToName[field.schema.customId] = field.name
-                account.cache.customFieldsNameToId[field.name] = field.schema.customId.toString()
-                account.cache.customFieldsType[field.schema.customId] = field.schema
-                SettingsData.cache.columns.push(field.schema.customId.toString(), field.name.toUpperCase())
-            }
-        }
-        // Virtual field mapping for deprecated Epic fields and Parent fields (only if not provided by Jira server)
-        if (!account.cache.customFieldsNameToId['EPIC NAME']) account.cache.customFieldsNameToId['EPIC NAME'] = 'VIRTUAL_EPIC_NAME'
-        if (!account.cache.customFieldsNameToId['Epic Name']) account.cache.customFieldsNameToId['Epic Name'] = 'VIRTUAL_EPIC_NAME'
-        if (!account.cache.customFieldsNameToId['EPIC LINK']) account.cache.customFieldsNameToId['EPIC LINK'] = 'VIRTUAL_EPIC_NAME'
-        if (!account.cache.customFieldsNameToId['Epic Link']) account.cache.customFieldsNameToId['Epic Link'] = 'VIRTUAL_EPIC_NAME'
-        account.cache.customFieldsIdToName['VIRTUAL_EPIC_NAME'] = 'EPIC NAME'
-
-        if (!account.cache.customFieldsNameToId['PARENT']) account.cache.customFieldsNameToId['PARENT'] = 'VIRTUAL_PARENT'
-        if (!account.cache.customFieldsNameToId['Parent']) account.cache.customFieldsNameToId['Parent'] = 'VIRTUAL_PARENT'
-        if (!account.cache.customFieldsNameToId['PARENT LINK']) account.cache.customFieldsNameToId['PARENT LINK'] = 'VIRTUAL_PARENT'
-        if (!account.cache.customFieldsNameToId['Parent Link']) account.cache.customFieldsNameToId['Parent Link'] = 'VIRTUAL_PARENT'
-        account.cache.customFieldsIdToName['VIRTUAL_PARENT'] = 'PARENT'
-        return true
-    } catch (e) {
-        console.error('Error while retrieving custom fields list of account:', account.alias, e)
-        // The name maps are only replaced after a successful load, so earlier names are still valid
-        return hasCustomFieldNames(account)
+function loadAccountCustomFields(account: IJiraIssueAccountSettings, states: Map<IJiraIssueAccountSettings, ICustomFieldsState>): Promise<boolean> {
+    const state = states.get(account)
+    if (state.loading) {
+        return state.loading
     }
+    state.loading = (async () => {
+        let response: IJiraField[] = null
+        try {
+            response = await sendRequest(
+                {
+                    method: 'GET',
+                    path: `/field`,
+                    account: account,
+                }
+            ) as IJiraField[]
+        } catch (e) {
+            console.error('Error while retrieving custom fields list of account:', account.alias, e)
+        }
+        // Counted from the end, so a request that times out doesn't shorten the wait before the next one
+        state.lastAttempt = Date.now()
+        state.loading = null
+        if (!isCurrent(states, account, state)) {
+            // A newer full update or another host owns the names and suggestions now
+            return false
+        }
+        try {
+            if (response) {
+                applyAccountCustomFields(account, response)
+                state.loaded = true
+            }
+            // The name maps are only replaced after a successful load, so earlier names are still valid
+            if (state.loaded) {
+                addColumnSuggestions(account)
+            }
+        } catch (e) {
+            console.error('Error while reading custom fields list of account:', account.alias, e)
+        }
+        return state.loaded
+    })()
+    return state.loading
 }
 
-async function fetchCustomFields(): Promise<Set<IJiraIssueAccountSettings>> {
-    const accountsWithoutNames = new Set<IJiraIssueAccountSettings>()
+async function updateAllCustomFields(states: Map<IJiraIssueAccountSettings, ICustomFieldsState>): Promise<void> {
     SettingsData.cache.columns = []
     for (const account of SettingsData.accounts) {
-        if (!await fetchAccountCustomFields(account)) {
-            accountsWithoutNames.add(account)
+        if (states !== customFieldsStates) {
+            // A newer full update loads all accounts again
+            return
+        }
+        states.set(account, { loaded: hasCustomFieldNames(account), loading: null, lastAttempt: 0, host: account.host })
+        await loadAccountCustomFields(account, states)
+    }
+    if (states !== customFieldsStates) {
+        return
+    }
+    for (const column of ['EPIC NAME', 'EPIC LINK', 'PARENT', 'PARENT LINK']) {
+        if (SettingsData.cache.columns.indexOf(column) === -1) {
+            SettingsData.cache.columns.push(column)
         }
     }
-    if (SettingsData.cache.columns.indexOf('EPIC NAME') === -1) {
-        SettingsData.cache.columns.push('EPIC NAME')
-    }
-    if (SettingsData.cache.columns.indexOf('EPIC LINK') === -1) {
-        SettingsData.cache.columns.push('EPIC LINK')
-    }
-    if (SettingsData.cache.columns.indexOf('PARENT') === -1) {
-        SettingsData.cache.columns.push('PARENT')
-    }
-    if (SettingsData.cache.columns.indexOf('PARENT LINK') === -1) {
-        SettingsData.cache.columns.push('PARENT LINK')
-    }
-    return accountsWithoutNames
 }
 
-function retryAccountCustomFields(account: IJiraIssueAccountSettings, accountsWithoutNames: Set<IJiraIssueAccountSettings>): Promise<boolean> {
-    let retry = customFieldsRetries.get(account)
-    if (!retry) {
-        retry = fetchAccountCustomFields(account).then(loaded => {
-            customFieldsRetries.delete(account)
-            if (loaded) {
-                accountsWithoutNames.delete(account)
-            }
-            return loaded
-        })
-        customFieldsRetries.set(account, retry)
+// Resolves once the custom field names being loaded are known, right away when none are loading.
+// false when the names of this account could not be loaded (e.g. timeout or 403 on /field).
+// Callers have just had an answer from Jira, so names that failed before are loaded again,
+// at most once per CUSTOM_FIELDS_RETRY_INTERVAL_MS
+async function customFieldsLoaded(account: IJiraIssueAccountSettings): Promise<boolean> {
+    // A full update started while waiting replaces the result of the one waited for
+    let states: Map<IJiraIssueAccountSettings, ICustomFieldsState>
+    do {
+        states = customFieldsStates
+        await customFieldsUpdate
+    } while (states !== customFieldsStates)
+
+    const state = account ? states.get(account) : null
+    if (!state) {
+        return true
     }
-    return retry
+    if (account.host !== state.host) {
+        // The host changed and the full update for the new one hasn't started yet
+        return false
+    }
+    if (state.loaded) {
+        return true
+    }
+    if (!state.loading && Date.now() - state.lastAttempt < CUSTOM_FIELDS_RETRY_INTERVAL_MS) {
+        return false
+    }
+    const loaded = await loadAccountCustomFields(account, states)
+    if (states !== customFieldsStates) {
+        // A full update started during the retry, its result counts
+        return customFieldsLoaded(account)
+    }
+    return loaded
 }
 
 export default {
@@ -467,20 +543,13 @@ export default {
     },
 
     async updateCustomFieldsCache(): Promise<void> {
-        customFieldsUpdate = fetchCustomFields()
+        const states = new Map<IJiraIssueAccountSettings, ICustomFieldsState>()
+        customFieldsStates = states
+        customFieldsUpdate = updateAllCustomFields(states)
         await customFieldsUpdate
     },
 
-    // Resolves once the custom field names being loaded are known, right away when none are loading.
-    // false when the names of this account could not be loaded (e.g. timeout or 403 on /field).
-    // Callers have just had an answer from Jira, so names that failed before are loaded again
-    async customFieldsLoaded(account: IJiraIssueAccountSettings): Promise<boolean> {
-        const accountsWithoutNames = await customFieldsUpdate
-        if (!account || !accountsWithoutNames.has(account)) {
-            return true
-        }
-        return retryAccountCustomFields(account, accountsWithoutNames)
-    },
+    customFieldsLoaded,
 
     // async updateJQLAutoCompleteCache(): Promise<void> {
     // const response = await sendRequest(
