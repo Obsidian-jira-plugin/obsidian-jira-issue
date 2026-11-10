@@ -36,6 +36,8 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     inlineIssueUrlToTag: true,
     inlineIssuePrefix: 'JIRA:',
     copyColumnTemplate: '{prefix}{key}',
+    notesFolder: '',
+    notesTemplate: '',
     issueSummaryMaxWidthRem: 20,
     issueStatusMaxWidthRem: 2,
     animateOverflowingText: false,
@@ -342,6 +344,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         this.displayAccountsSettings()
         this.displayRenderingSettings()
         this.displaySearchColumnsSettings(isSearchColumnsDetailsOpen)
+        this.displayNotesSettings()
         this.displayExtraSettings()
         this.displayFooter()
     }
@@ -877,6 +880,33 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     await this.saveSettings()
                     // Force refresh
                     this.display()
+                }))
+    }
+
+    displayNotesSettings() {
+        const { containerEl } = this
+        new Setting(containerEl).setName('Notes column').setHeading()
+
+        new Setting(containerEl)
+            .setName('Folder for new notes')
+            .setDesc('Folder in which the ➕ button of the Notes column creates new notes. Leave empty to use the default location for new notes.')
+            .addText(text => text
+                .setPlaceholder('Example: Jira/Notes')
+                .setValue(SettingsData.notesFolder)
+                .onChange(async value => {
+                    SettingsData.notesFolder = value.trim()
+                    await this.saveSettings({ isVisualOnly: true })
+                }))
+
+        new Setting(containerEl)
+            .setName('Template for new notes')
+            .setDesc('Note whose content is copied into new notes created with the ➕ button. Leave empty to create empty notes.')
+            .addText(text => text
+                .setPlaceholder('Example: Templates/Jira issue')
+                .setValue(SettingsData.notesTemplate)
+                .onChange(async value => {
+                    SettingsData.notesTemplate = value.trim()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
     }
 

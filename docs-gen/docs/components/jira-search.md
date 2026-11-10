@@ -113,6 +113,13 @@ AAA-123 Custom string
 ```
 If no notes are found, a `➕` button will be shown in order to allow the creation of a new note directly from this table.
 
+By default the new note is empty and is created in Obsidian's default location for new notes. In the plugin settings, section **Notes column**, you can change this:
+
+- **Folder for new notes:** the note is created in this folder, for example `Jira/Notes`. The folder is created if it doesn't exist yet.
+- **Template for new notes:** the content of this note is copied into the new note, for example `Templates/Jira issue`. The `.md` extension is optional. The template is copied as is, template variables are not replaced.
+
+The new note is always named after the issue key (for example `AAA-123.md`), so it shows up in the column afterwards. Notes are found by their name anywhere in the vault, not only in the configured folder.
+
 ### Frontmatter
 
 You can also access the frontmatter section of the linked notes using the [jsonpath](https://github.com/dchester/jsonpath) syntax after the column `NOTES`. Example:
