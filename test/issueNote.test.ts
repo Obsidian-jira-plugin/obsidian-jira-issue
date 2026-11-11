@@ -12,13 +12,13 @@ jest.mock('../src/main', () => ({
     }
 }))
 jest.mock('../src/settings', () => ({
-    SettingsData: { notesFolder: '', notesTemplate: '' }
+    SettingsData: { notesPath: '', notesTemplate: '' }
 }))
 
 import { Notice, TFile, TFolder } from 'obsidian'
 import { ObsidianApp } from '../src/main'
 import { SettingsData } from '../src/settings'
-import { isIssueNote, issueNoteFolder, issueNotePath, openOrCreateIssueNote } from '../src/rendering/issueNote'
+import { issueNoteMatcher, issueNotePath, openOrCreateIssueNote } from '../src/rendering/issueNote'
 
 function file(path: string): TFile {
     const f = new TFile()
@@ -41,50 +41,72 @@ describe('issueNote', () => {
 
     beforeEach(() => {
         jest.clearAllMocks()
-        SettingsData.notesFolder = ''
+        SettingsData.notesPath = ''
         SettingsData.notesTemplate = ''
         files = {}
         vault.getAbstractFileByPath.mockImplementation((path: string) => files[path] ?? null)
         vault.getMarkdownFiles.mockImplementation(() => Object.values(files).filter(f => f instanceof TFile && f.path.endsWith('.md')))
         vault.create.mockImplementation(async (path: string) => file(path))
+        vault.createFolder.mockImplementation(async (path: string) => { files[path] = folder(path) })
         getNewFileParent.mockReturnValue(folder('/'))
         ;(ObsidianApp.workspace.getLeaf as jest.Mock).mockReturnValue({ openFile })
     })
 
-    describe('isIssueNote', () => {
+    describe('issueNotePath', () => {
+        test('without template: <key>.md in the default location for new notes', () => {
+            expect(issueNotePath('AAA-1', '')).toBe('AAA-1.md')
+            getNewFileParent.mockReturnValue(folder('Inbox'))
+            expect(issueNotePath('AAA-1', '')).toBe('Inbox/AAA-1.md')
+        })
+
+        test('without template: next to the note containing the table, if Obsidian is set up that way', () => {
+            getNewFileParent.mockImplementation((sourcePath: string) => folder(sourcePath ? 'Projects/Foo' : '/'))
+            expect(issueNotePath('AAA-1', '', 'Projects/Foo/overview.md')).toBe('Projects/Foo/AAA-1.md')
+            expect(getNewFileParent).toHaveBeenCalledWith('Projects/Foo/overview.md')
+        })
+
+        test.each([
+            ['{key}', 'AAA-1.md'],
+            ['Jira/{key}', 'Jira/AAA-1.md'],
+            ['/Jira//{key}', 'Jira/AAA-1.md'],
+            ['Tickets/{project}/TT- {key}', 'Tickets/AAA/TT- AAA-1.md'],
+            ['Jira/{key}.md', 'Jira/AAA-1.md'],
+            ['{key}/{key} main', 'AAA-1/AAA-1 main.md'],
+        ])('template %p gives %p', (template, expected) => {
+            expect(issueNotePath('AAA-1', template)).toBe(expected)
+        })
+
+        test('the project is everything before the last dash of the key', () => {
+            expect(issueNotePath('MY-PROJ-12', '{project}/{key}')).toBe('MY-PROJ/MY-PROJ-12.md')
+        })
+
+        test('uses the setting, but not a template without {key}', () => {
+            SettingsData.notesPath = 'Jira/{key}'
+            expect(issueNotePath('AAA-1')).toBe('Jira/AAA-1.md')
+            SettingsData.notesPath = 'Jira/notes'
+            expect(issueNotePath('AAA-1')).toBe('AAA-1.md')
+        })
+    })
+
+    describe('issueNoteMatcher', () => {
         test.each([
             ['AAA-1.md', true],
             ['AAA-1 Some summary.md', true],
             ['AAA-12.md', false],
             ['AAA-10 Other issue.md', false],
             ['Notes about AAA-1.md', false],
-        ])('%p is a note of AAA-1: %p', (name, expected) => {
-            expect(isIssueNote(file(name), 'AAA-1')).toBe(expected)
-        })
-    })
-
-    describe('issueNoteFolder', () => {
-        test('uses the configured folder', () => {
-            expect(issueNoteFolder(' Jira/Notes/ ')).toBe('Jira/Notes')
-            expect(getNewFileParent).not.toHaveBeenCalled()
+        ])('without template, %p is a note of AAA-1: %p', (name, expected) => {
+            expect(issueNoteMatcher('AAA-1')(file(name))).toBe(expected)
         })
 
-        test('falls back to the default location for new notes', () => {
-            getNewFileParent.mockReturnValue(folder('Inbox'))
-            expect(issueNoteFolder('')).toBe('Inbox')
-            expect(issueNoteFolder('  ')).toBe('Inbox')
-        })
-    })
-
-    describe('issueNotePath', () => {
-        test.each([
-            ['', 'AAA-1.md'],
-            ['/', 'AAA-1.md'],
-            ['Jira', 'Jira/AAA-1.md'],
-            ['Jira/Notes/', 'Jira/Notes/AAA-1.md'],
-            ['/Jira//Notes', 'Jira/Notes/AAA-1.md'],
-        ])('folder %p gives %p', (folderPath, expected) => {
-            expect(issueNotePath('AAA-1', folderPath)).toBe(expected)
+        test('with template, also the note at the template path', () => {
+            SettingsData.notesPath = 'Tickets/{project}/TT- {key}'
+            const matches = issueNoteMatcher('AAA-1')
+            expect(matches(file('Tickets/AAA/TT- AAA-1.md'))).toBe(true)
+            expect(matches(file('Other/TT- AAA-1.md'))).toBe(false)
+            expect(matches(file('Tickets/AAA/TT- AAA-12.md'))).toBe(false)
+            expect(matches(file('Somewhere/AAA-1 notes.md'))).toBe(true)
+            expect(matches(file('tickets/aaa/tt- AAA-1.md'))).toBe(true)
         })
     })
 
@@ -98,15 +120,53 @@ describe('issueNote', () => {
             expect(openFile).toHaveBeenCalledWith(expect.objectContaining({ path: 'Inbox/AAA-1.md' }))
         })
 
-        test('creates a missing folder', async () => {
-            SettingsData.notesFolder = 'Jira/Notes'
+        test('creates the note at the template path, with missing folders', async () => {
+            SettingsData.notesPath = 'Tickets/{project}/TT- {key}'
             await openOrCreateIssueNote('AAA-1')
-            expect(vault.createFolder).toHaveBeenCalledWith('Jira/Notes')
-            expect(vault.create).toHaveBeenCalledWith('Jira/Notes/AAA-1.md', '')
+            expect(vault.createFolder).toHaveBeenCalledWith('Tickets/AAA')
+            expect(vault.create).toHaveBeenCalledWith('Tickets/AAA/TT- AAA-1.md', '')
+        })
+
+        test('passes the note containing the table on for the default location', async () => {
+            getNewFileParent.mockImplementation((sourcePath: string) => folder(sourcePath === 'Projects/Foo/overview.md' ? 'Projects/Foo' : '/'))
+            files['Projects/Foo'] = folder('Projects/Foo')
+            await openOrCreateIssueNote('AAA-1', false, 'Projects/Foo/overview.md')
+            expect(vault.create).toHaveBeenCalledWith('Projects/Foo/AAA-1.md', '')
+        })
+
+        test('notes of two issues can create the same folder at the same time', async () => {
+            SettingsData.notesPath = 'Jira/{project}/{key}'
+            vault.createFolder.mockImplementation(async (path: string) => {
+                await new Promise(resolve => setImmediate(resolve))
+                if (files[path]) {
+                    throw new Error('Folder already exists.')
+                }
+                files[path] = folder(path)
+            })
+            await Promise.all([openOrCreateIssueNote('AAA-1'), openOrCreateIssueNote('AAA-2')])
+            expect(vault.create).toHaveBeenCalledWith('Jira/AAA/AAA-1.md', '')
+            expect(vault.create).toHaveBeenCalledWith('Jira/AAA/AAA-2.md', '')
+            expect(Notice).not.toHaveBeenCalled()
+        })
+
+        test('creates nothing when another file is at the path', async () => {
+            SettingsData.notesPath = 'Jira/{key}'
+            files['Jira'] = folder('Jira')
+            files['Jira/AAA-1.md'] = folder('Jira/AAA-1.md')
+            await openOrCreateIssueNote('AAA-1')
+            expect(Notice).toHaveBeenCalledWith(expect.stringContaining('already exists'))
+            expect(vault.create).not.toHaveBeenCalled()
+        })
+
+        test('creates nothing when the path has no {key}', async () => {
+            SettingsData.notesPath = 'Jira/notes'
+            await openOrCreateIssueNote('AAA-1')
+            expect(Notice).toHaveBeenCalledWith(expect.stringContaining('{key}'))
+            expect(vault.create).not.toHaveBeenCalled()
         })
 
         test('creates nothing when the folder path is a file', async () => {
-            SettingsData.notesFolder = 'Jira'
+            SettingsData.notesPath = 'Jira/{key}'
             files['Jira'] = file('Jira')
             await openOrCreateIssueNote('AAA-1')
             expect(Notice).toHaveBeenCalledWith(expect.stringContaining('is not a folder'))
@@ -117,7 +177,6 @@ describe('issueNote', () => {
             const template = file('Templates/Issue.md')
             files['Templates/Issue.md'] = template
             vault.read.mockResolvedValue('# Template')
-            vault.create.mockImplementation(async (path: string) => file(path))
             for (const setting of ['Templates/Issue', 'Templates/Issue.md']) {
                 SettingsData.notesTemplate = setting
                 await openOrCreateIssueNote('AAA-1')
@@ -127,7 +186,7 @@ describe('issueNote', () => {
         })
 
         test('opens a note of the issue that exists anywhere in the vault', async () => {
-            SettingsData.notesFolder = 'Jira'
+            SettingsData.notesPath = 'Jira/{key}'
             SettingsData.notesTemplate = 'Templates/Issue'
             const existing = file('Projects/AAA-1 design.md')
             files[existing.path] = existing
@@ -138,7 +197,7 @@ describe('issueNote', () => {
         })
 
         test('creates the note only once on a double click', async () => {
-            SettingsData.notesFolder = 'Jira'
+            SettingsData.notesPath = 'Jira/{key}'
             await Promise.all([openOrCreateIssueNote('AAA-1'), openOrCreateIssueNote('AAA-1')])
             expect(vault.createFolder).toHaveBeenCalledTimes(1)
             expect(vault.create).toHaveBeenCalledTimes(1)
@@ -146,7 +205,7 @@ describe('issueNote', () => {
         })
 
         test('creates nothing when the template does not exist', async () => {
-            SettingsData.notesFolder = 'Jira'
+            SettingsData.notesPath = 'Jira/{key}'
             SettingsData.notesTemplate = 'Templates/Missing'
             await openOrCreateIssueNote('AAA-1')
             expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Templates/Missing'))

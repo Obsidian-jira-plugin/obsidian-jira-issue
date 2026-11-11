@@ -345,23 +345,23 @@ describe('renderTableColumns', () => {
 
         test('click creates or opens the note through the plugin', async () => {
             const row = { cells: [] } as any
-            await renderTableColumn(notesColumn, issue, row)
+            await renderTableColumn(notesColumn, issue, row, false, 'Projects/overview.md')
             const link = row.cells[0].children[0]
             expect(link.text).toEqual('➕')
             const event = { preventDefault: jest.fn() }
             link.listeners.click(event)
             expect(event.preventDefault).toHaveBeenCalled()
-            expect(openOrCreateIssueNote).toHaveBeenCalledWith('AAA-1', false)
+            expect(openOrCreateIssueNote).toHaveBeenCalledWith('AAA-1', false, 'Projects/overview.md')
         })
 
         test('middle click opens the note in a new tab', async () => {
             const row = { cells: [] } as any
-            await renderTableColumn(notesColumn, issue, row)
+            await renderTableColumn(notesColumn, issue, row, false, 'Projects/overview.md')
             const link = row.cells[0].children[0]
             link.listeners.auxclick({ button: 2, preventDefault: jest.fn() })
             expect(openOrCreateIssueNote).not.toHaveBeenCalled()
             link.listeners.auxclick({ button: 1, preventDefault: jest.fn() })
-            expect(openOrCreateIssueNote).toHaveBeenCalledWith('AAA-1', 'tab')
+            expect(openOrCreateIssueNote).toHaveBeenCalledWith('AAA-1', 'tab', 'Projects/overview.md')
         })
     })
 })

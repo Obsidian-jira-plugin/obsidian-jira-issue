@@ -55,7 +55,7 @@ export interface IJiraIssueSettings {
     inlineIssueUrlToTag: boolean
     inlineIssuePrefix: string
     copyColumnTemplate: string
-    notesFolder: string
+    notesPath: string
     notesTemplate: string
     issueSummaryMaxWidthRem: number
     issueStatusMaxWidthRem: number

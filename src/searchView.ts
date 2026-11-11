@@ -10,6 +10,8 @@ export class SearchView {
     columns: ISearchColumn[] = []
     account: IJiraIssueAccountSettings = null
     label: string = null
+    // Note that contains the block, for "Same folder as current file" when creating notes
+    sourcePath = ''
     private _cacheKey: string = null
 
     static fromString(str: string): SearchView {

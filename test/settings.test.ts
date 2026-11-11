@@ -30,7 +30,7 @@ const StoredSettings = {
     colorSchema: EColorSchema.LIGHT,
     inlineIssuePrefix: 'inlineIssuePrefixVal',
     copyColumnTemplate: 'copyColumnTemplateVal',
-    notesFolder: 'notesFolderVal',
+    notesPath: 'notesPathVal',
     notesTemplate: 'notesTemplateVal',
     inlineIssueUrlToTag: true,
     logImagesFetch: false,
