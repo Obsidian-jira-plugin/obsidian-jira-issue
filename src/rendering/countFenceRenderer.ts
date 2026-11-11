@@ -37,6 +37,15 @@ function renderSearchCountFailure(el: HTMLElement, searchView: SearchView, error
         () => RC.renderSearchError(el, error as string, searchView))
 }
 
+// The 2025 search API does not return a total, so it is fetched separately, from the
+// approximate-count endpoint, using the account that answered the search
+async function resolveTotal(searchResults: IJiraSearchResults, query: string): Promise<IJiraSearchResults> {
+    if (searchResults.total === undefined && searchResults.account?.use2025Api) {
+        searchResults.total = await JiraClient.getApproximateCount(query, { account: searchResults.account })
+    }
+    return searchResults
+}
+
 export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> => {
     // console.log(`Search query: ${source}`)
     const searchView = SearchView.fromString(source)
@@ -50,12 +59,14 @@ export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: M
     } else {
         RC.renderLoadingItem('Loading...')
         const generation = LastGoodCache.generation()
-        JiraClient.getSearchResults(searchView.query, { limit: 1 }).then(newSearchResults => {
-            const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
-            renderSearchCountOrError(el, searchResults, searchView, () => LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults, generation))
-        }, err => {
-            ObjectsCache.add(searchView.getCacheKey(), err, true)
-            renderSearchCountFailure(el, searchView, err)
-        })
+        JiraClient.getSearchResults(searchView.query, { limit: 1 })
+            .then(newSearchResults => resolveTotal(newSearchResults, searchView.query))
+            .then(newSearchResults => {
+                const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
+                renderSearchCountOrError(el, searchResults, searchView, () => LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults, generation))
+            }, err => {
+                ObjectsCache.add(searchView.getCacheKey(), err, true)
+                renderSearchCountFailure(el, searchView, err)
+            })
     }
 }
