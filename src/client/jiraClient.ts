@@ -397,6 +397,23 @@ function retryAccountCustomFields(account: IJiraIssueAccountSettings, accountsWi
     return retry
 }
 
+// The 2025 search API (/search/jql) does not return a total, unlike the deprecated /search.
+// Jira Cloud's approximate-count endpoint is the replacement for getting a count on its own
+async function fetchApproximateCount(query: string, account: IJiraIssueAccountSettings): Promise<number> {
+    const result = await sendRequest(
+        {
+            method: 'POST',
+            path: '/search/approximate-count',
+            account: account,
+            body: JSON.stringify({ jql: query }),
+        }
+    ) as { count?: number }
+    if (typeof result.count !== 'number') {
+        throw new Error('Jira did not return the number of issues')
+    }
+    return result.count
+}
+
 export default {
 
     async getIssue(issueKey: string, options: { fields?: string[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraIssue> {
@@ -456,18 +473,31 @@ export default {
         return searchResults
     },
 
-    // The 2025 search API (/search/jql) does not return a total, unlike the deprecated /search.
-    // Jira Cloud's approximate-count endpoint is the replacement for getting a count on its own
-    async getApproximateCount(query: string, options: { account?: IJiraIssueAccountSettings } = {}): Promise<number> {
-        const result = await sendRequest(
+    // Number of issues matching the query, as search results without issues (total and account).
+    // A known account with the 2025 API is asked for the count directly. Otherwise a search for
+    // one key finds the account that answers, and with the 2025 API the count is asked after it
+    async getSearchCount(query: string, options: { account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSearchResults> {
+        const account = options.account || (SettingsData.accounts.length === 1 ? SettingsData.accounts[0] : null)
+        if (account?.use2025Api) {
+            return { issues: [], total: await fetchApproximateCount(query, account), account }
+        }
+        const searchResults = await sendRequest(
             {
-                method: 'POST',
-                path: '/search/approximate-count',
-                account: options.account || null,
-                body: JSON.stringify({ jql: query }),
+                method: 'GET',
+                path: '/search',
+                path2025: '/search/jql',
+                queryParameters: new URLSearchParams({ jql: query, fields: 'key', maxResults: '1' }),
+                account: account,
             }
-        ) as { count: number }
-        return result.count
+        ) as IJiraSearchResults
+        let total = searchResults.total
+        if (total === undefined && searchResults.account?.use2025Api) {
+            total = await fetchApproximateCount(query, searchResults.account)
+        }
+        if (typeof total !== 'number') {
+            throw new Error('Jira did not return the number of issues')
+        }
+        return { issues: [], total, account: searchResults.account }
     },
 
     async updateStatusColorCache(status: string, account: IJiraIssueAccountSettings): Promise<void> {

@@ -37,19 +37,16 @@ function renderSearchCountFailure(el: HTMLElement, searchView: SearchView, error
         () => RC.renderSearchError(el, error as string, searchView))
 }
 
-// The 2025 search API does not return a total, so it is fetched separately, from the
-// approximate-count endpoint, using the account that answered the search
-async function resolveTotal(searchResults: IJiraSearchResults, query: string): Promise<IJiraSearchResults> {
-    if (searchResults.total === undefined && searchResults.account?.use2025Api) {
-        searchResults.total = await JiraClient.getApproximateCount(query, { account: searchResults.account })
-    }
-    return searchResults
+// jira-search caches its results under the same key, and a count has neither its issues nor
+// (with the 2025 API) does a search have the count
+function countCacheKey(searchView: SearchView): string {
+    return `count:${searchView.getCacheKey()}`
 }
 
 export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> => {
     // console.log(`Search query: ${source}`)
     const searchView = SearchView.fromString(source)
-    const cachedSearchResults = ObjectsCache.get(searchView.getCacheKey())
+    const cachedSearchResults = ObjectsCache.get(countCacheKey(searchView))
     if (cachedSearchResults) {
         if (cachedSearchResults.isError) {
             renderSearchCountFailure(el, searchView, cachedSearchResults.data)
@@ -59,13 +56,12 @@ export const CountFenceRenderer = async (source: string, el: HTMLElement, ctx: M
     } else {
         RC.renderLoadingItem('Loading...')
         const generation = LastGoodCache.generation()
-        JiraClient.getSearchResults(searchView.query, { limit: 1 })
-            .then(newSearchResults => resolveTotal(newSearchResults, searchView.query))
+        JiraClient.getSearchCount(searchView.query, { account: searchView.account })
             .then(newSearchResults => {
-                const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
+                const searchResults = ObjectsCache.add(countCacheKey(searchView), newSearchResults).data as IJiraSearchResults
                 renderSearchCountOrError(el, searchResults, searchView, () => LastGoodCache.rememberCount(searchView.getCacheKey(), searchResults, generation))
             }, err => {
-                ObjectsCache.add(searchView.getCacheKey(), err, true)
+                ObjectsCache.add(countCacheKey(searchView), err, true)
                 renderSearchCountFailure(el, searchView, err)
             })
     }

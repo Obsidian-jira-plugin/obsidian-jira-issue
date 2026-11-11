@@ -215,18 +215,82 @@ describe('JiraClient', () => {
             const calledUrl = (requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam).url
             expect(calledUrl).not.toContain('nextPageToken')
         })
+    })
 
-        test('getApproximateCount posts the jql to the approximate-count endpoint', async () => {
-            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: { count: 42 } } as any)
-            const account2025 = { ...TestAccountOpen, use2025Api: true }
+    describe('getSearchCount', () => {
+        const ok = (json: unknown) => ({ status: 200, headers: defaultHeaders, json } as any)
+        const calledUrl = (i: number) => (requestUrlMock.mock.calls[i][0] as obsidian.RequestUrlParam).url
+        const calledMethod = (i: number) => (requestUrlMock.mock.calls[i][0] as obsidian.RequestUrlParam).method
+        const originalAccounts = SettingsData.accounts
+        const account2025 = { ...TestAccountOpen, alias: 'Cloud', use2025Api: true }
+        const accountLegacy = { ...TestAccountOpen, alias: 'Server', use2025Api: false }
 
-            const count = await JiraClient.getApproximateCount('project = TEST', { account: account2025 })
+        afterEach(() => {
+            SettingsData.accounts = originalAccounts
+            requestUrlMock.mockClear()
+        })
 
-            expect(count).toEqual(42)
-            const calledRequest = requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam
-            expect(calledRequest.method).toEqual('POST')
-            expect(calledRequest.url).toContain('/search/approximate-count')
-            expect(calledRequest.body).toEqual(JSON.stringify({ jql: 'project = TEST' }))
+        test('asks a known 2025 account for the count directly, without a search', async () => {
+            SettingsData.accounts = [accountLegacy, account2025]
+            requestUrlMock.mockReturnValueOnce(ok({ count: 42 }))
+
+            const result = await JiraClient.getSearchCount('project = TEST', { account: account2025 })
+
+            expect(result).toEqual({ issues: [], total: 42, account: account2025 })
+            expect(requestUrlMock).toHaveBeenCalledTimes(1)
+            expect(calledMethod(0)).toEqual('POST')
+            expect(calledUrl(0)).toContain('/search/approximate-count')
+            expect((requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam).body).toEqual(JSON.stringify({ jql: 'project = TEST' }))
+        })
+
+        test('uses the only account without an account in the options', async () => {
+            SettingsData.accounts = [account2025]
+            requestUrlMock.mockReturnValueOnce(ok({ count: 7 }))
+
+            expect((await JiraClient.getSearchCount('project = TEST')).total).toEqual(7)
+            expect(requestUrlMock).toHaveBeenCalledTimes(1)
+            expect(calledUrl(0)).toContain('/search/approximate-count')
+        })
+
+        test('takes the total of a search that asks only for one key', async () => {
+            SettingsData.accounts = [accountLegacy, account2025]
+            requestUrlMock.mockReturnValueOnce(ok({ total: 13, issues: [{ key: 'AAA-1' }] }))
+
+            const result = await JiraClient.getSearchCount('project = TEST')
+
+            expect(result).toEqual({ issues: [], total: 13, account: accountLegacy })
+            expect(requestUrlMock).toHaveBeenCalledTimes(1)
+            const url = new URL(calledUrl(0))
+            expect(url.pathname).toMatch(/\/search$/)
+            expect(url.searchParams.get('fields')).toEqual('key')
+            expect(url.searchParams.get('maxResults')).toEqual('1')
+        })
+
+        test('asks the 2025 account that answered the search for the count', async () => {
+            SettingsData.accounts = [account2025, accountLegacy]
+            requestUrlMock
+                .mockReturnValueOnce(ok({ issues: [{ key: 'AAA-1' }], isLast: false }))
+                .mockReturnValueOnce(ok({ count: 99 }))
+
+            const result = await JiraClient.getSearchCount('project = TEST')
+
+            expect(result).toEqual({ issues: [], total: 99, account: account2025 })
+            expect(calledUrl(0)).toContain('/search/jql')
+            expect(calledUrl(1)).toContain('/search/approximate-count')
+        })
+
+        test('fails with a readable error when Jira returns no count', async () => {
+            SettingsData.accounts = [account2025]
+            requestUrlMock.mockReturnValueOnce(ok({}))
+
+            await expect(JiraClient.getSearchCount('project = TEST')).rejects.toThrow('Jira did not return the number of issues')
+        })
+
+        test('fails with a readable error when a search returns no total', async () => {
+            SettingsData.accounts = [accountLegacy, account2025]
+            requestUrlMock.mockReturnValueOnce(ok({ issues: [] }))
+
+            await expect(JiraClient.getSearchCount('project = TEST')).rejects.toThrow('Jira did not return the number of issues')
         })
     })
 

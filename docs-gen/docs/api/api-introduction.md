@@ -32,6 +32,7 @@ The responses are cached in order to reduce the network load.
 
 - [`$ji.base.getIssue(issueKey: string, options: { fields?: string[], account?: IJiraIssueAccountSettings } = {})`](/docs/api/api-base#getIssue)
 - [`$ji.base.getSearchResults(query: string, options: { limit?: number, offset?: number, fields?: string[], account?: IJiraIssueAccountSettings } = {})`](/docs/api/api-base#getSearchResults)
+- [`$ji.base.getSearchCount(query: string, options: { account?: IJiraIssueAccountSettings } = {})`](/docs/api/api-base#getSearchCount)
 - [`$ji.base.getDevStatus(issueId: string, options: { account?: IJiraIssueAccountSettings } = {})`](/docs/api/api-base#getDevStatus)
 - [`$ji.base.getBoards(projectKeyOrId: string, options: { limit?: number, offset?: number, account?: IJiraIssueAccountSettings } = {})`](/docs/api/api-base#getBoards)
 - [`$ji.base.getSprint(sprintId: number, options: { account?: IJiraIssueAccountSettings } = {})`](/docs/api/api-base#getSprint)

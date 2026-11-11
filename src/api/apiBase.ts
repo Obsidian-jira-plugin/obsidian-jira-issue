@@ -28,6 +28,11 @@ export async function getSearchResults(this: void, query: string, options: { lim
     return cacheWrapper(JiraClient.getSearchResults)(query, options)
 }
 
+// Number of issues matching the query, also with the 2025 search API, which returns no total
+export async function getSearchCount(this: void, query: string, options: { account?: IJiraIssueAccountSettings } = {}): Promise<number> {
+    return (await cacheWrapper(JiraClient.getSearchCount)(query, options)).total
+}
+
 export async function getDevStatus(this: void, issueId: string, options: { account?: IJiraIssueAccountSettings } = {}): Promise<IJiraDevStatus> {
     return cacheWrapper(JiraClient.getDevStatus)(issueId, options)
 }
