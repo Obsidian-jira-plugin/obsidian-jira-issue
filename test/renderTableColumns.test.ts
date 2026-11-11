@@ -4,6 +4,10 @@ jest.mock('../src/main', () => ({
 }))
 jest.mock('../src/api/apiBase', () => ({ getIssue: jest.fn() }))
 jest.mock('../src/client/jiraClient', () => ({ __esModule: true, default: { getDevStatus: jest.fn() } }))
+jest.mock('../src/rendering/issueNote', () => ({
+    ...jest.requireActual('../src/rendering/issueNote'),
+    openOrCreateIssueNote: jest.fn(),
+}))
 
 import { getIssue } from '../src/api/apiBase'
 import JiraClient from '../src/client/jiraClient'
@@ -12,6 +16,8 @@ import { SettingsData } from '../src/settings'
 import { ESearchColumnsTypes, ISearchColumn } from '../src/interfaces/settingsInterfaces'
 import { IJiraIssue, toDefaultedIssue } from '../src/interfaces/issueInterfaces'
 import { TestAccountOpen } from './testData'
+import RC from '../src/rendering/renderingCommon'
+import { openOrCreateIssueNote } from '../src/rendering/issueNote'
 
 describe('renderTableColumns', () => {
     beforeAll(() => {
@@ -22,6 +28,9 @@ describe('renderTableColumns', () => {
                 textContent: options.text || '',
                 href: options.href || '',
                 title: options.title || '',
+                cls: options.cls || '',
+                listeners: {} as Record<string, (event: any) => void>,
+                addEventListener: function(type: string, listener: (event: any) => void) { this.listeners[type] = listener },
                 children: [] as any[],
                 parent: options.parent,
                 setText: function(t: string) { this.textContent = t }
@@ -324,6 +333,35 @@ describe('renderTableColumns', () => {
 
         test('is false without custom field columns', () => {
             expect(hasCustomFieldColumnsByName([{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }])).toEqual(false)
+        })
+    })
+    describe('NOTES column create link', () => {
+        const notesColumn: ISearchColumn[] = [{ type: ESearchColumnsTypes.NOTES, compact: false }]
+        const issue = { id: '1', key: 'AAA-1', fields: {}, account: TestAccountOpen } as unknown as IJiraIssue
+
+        beforeEach(() => {
+            jest.spyOn(RC, 'getNotes').mockReturnValue([])
+        })
+
+        test('click creates or opens the note through the plugin', async () => {
+            const row = { cells: [] } as any
+            await renderTableColumn(notesColumn, issue, row, false, 'Projects/overview.md')
+            const link = row.cells[0].children[0]
+            expect(link.text).toEqual('➕')
+            const event = { preventDefault: jest.fn() }
+            link.listeners.click(event)
+            expect(event.preventDefault).toHaveBeenCalled()
+            expect(openOrCreateIssueNote).toHaveBeenCalledWith('AAA-1', false, 'Projects/overview.md')
+        })
+
+        test('middle click opens the note in a new tab', async () => {
+            const row = { cells: [] } as any
+            await renderTableColumn(notesColumn, issue, row, false, 'Projects/overview.md')
+            const link = row.cells[0].children[0]
+            link.listeners.auxclick({ button: 2, preventDefault: jest.fn() })
+            expect(openOrCreateIssueNote).not.toHaveBeenCalled()
+            link.listeners.auxclick({ button: 1, preventDefault: jest.fn() })
+            expect(openOrCreateIssueNote).toHaveBeenCalledWith('AAA-1', 'tab', 'Projects/overview.md')
         })
     })
 })

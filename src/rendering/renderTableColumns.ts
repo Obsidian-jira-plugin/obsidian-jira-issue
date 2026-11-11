@@ -1,4 +1,4 @@
-import { Notice, setIcon, TFile } from "obsidian"
+import { Keymap, Notice, setIcon, TFile } from "obsidian"
 import { IJiraDevStatus, IJiraIssue } from "../interfaces/issueInterfaces"
 import RC, { JIRA_STATUS_COLOR_MAP, JIRA_STATUS_COLOR_MAP_BY_NAME } from "./renderingCommon"
 import * as jsonpath from 'jsonpath'
@@ -7,6 +7,7 @@ import JiraClient from "../client/jiraClient"
 import { AVATAR_RESOLUTION, ESearchColumnsTypes, ISearchColumn } from "../interfaces/settingsInterfaces"
 import { getIssue } from "../api/apiBase"
 import { SettingsData } from "../settings"
+import { issueNoteMatcher, openOrCreateIssueNote } from "./issueNote"
 
 const DESCRIPTION_COMPACT_MAX_LENGTH = 20
 
@@ -133,7 +134,7 @@ export function trimIssueForColumns(issue: IJiraIssue, columns: ISearchColumn[])
 
 // offline: the issue comes from the saved results shown while Jira is unreachable, so columns
 // that need more data from Jira only use what is already in memory
-export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement, offline = false): Promise<void> => {
+export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIssue, row: HTMLTableRowElement, offline = false, sourcePath = ''): Promise<void> => {
     let markdownNotes: TFile[] = null
     for (const column of columns) {
         switch (column.type) {
@@ -373,8 +374,7 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
                     markdownNotes = RC.getNotes()
                 }
                 const noteCell = createEl('td', { parent: row })
-                const noteRegex = new RegExp('^' + issue.key + '[^0-9]')
-                const connectedNotes = markdownNotes.filter(n => n.name.match(noteRegex))
+                const connectedNotes = markdownNotes.filter(issueNoteMatcher(issue.key))
                 if (connectedNotes.length > 0) {
                     for (const note of connectedNotes) {
                         if (column.extra) {
@@ -384,7 +384,17 @@ export const renderTableColumn = async (columns: ISearchColumn[], issue: IJiraIs
                         }
                     }
                 } else {
-                    createEl('a', { text: '➕', title: 'Create new note', href: issue.key, cls: 'internal-link icon-link', parent: noteCell })
+                    const createLink = createEl('a', { text: '➕', title: 'Create new note', href: '#', cls: 'icon-link', parent: noteCell })
+                    createLink.addEventListener('click', (event: MouseEvent) => {
+                        event.preventDefault()
+                        void openOrCreateIssueNote(issue.key, Keymap.isModEvent(event), sourcePath)
+                    })
+                    createLink.addEventListener('auxclick', (event: MouseEvent) => {
+                        if (event.button === 1) {
+                            event.preventDefault()
+                            void openOrCreateIssueNote(issue.key, 'tab', sourcePath)
+                        }
+                    })
                 }
                 break
             }

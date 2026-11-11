@@ -8,6 +8,7 @@ import { decryptSecret, encryptSecret } from './crypto/encryption'
 import { UnlockModal } from './modals/unlockModal'
 import { refreshInlineIssuesEffect } from './rendering/inlineIssueViewPlugin'
 import { COPY_TEMPLATE_PLACEHOLDERS } from './rendering/renderTableColumns'
+import { NOTE_PATH_KEY_PLACEHOLDER } from './rendering/issueNote'
 
 export let MasterPassphraseSession: string | null = null
 
@@ -36,6 +37,8 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     inlineIssueUrlToTag: true,
     inlineIssuePrefix: 'JIRA:',
     copyColumnTemplate: '{prefix}{key}',
+    notesPath: '',
+    notesTemplate: '',
     issueSummaryMaxWidthRem: 20,
     issueStatusMaxWidthRem: 2,
     animateOverflowingText: false,
@@ -342,6 +345,7 @@ export class JiraIssueSettingTab extends PluginSettingTab {
         this.displayAccountsSettings()
         this.displayRenderingSettings()
         this.displaySearchColumnsSettings(isSearchColumnsDetailsOpen)
+        this.displayNotesSettings()
         this.displayExtraSettings()
         this.displayFooter()
     }
@@ -877,6 +881,47 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     await this.saveSettings()
                     // Force refresh
                     this.display()
+                }))
+    }
+
+    displayNotesSettings() {
+        const { containerEl } = this
+        new Setting(containerEl).setName('Notes column').setHeading()
+
+        const notesPathDesc = (path: string) => {
+            const desc = createFragment()
+            desc.append(
+                'Path from the vault root where the ➕ button of the Notes column creates new notes. ',
+                'Placeholders: {key} (e.g. AAA-123, required) and {project} (e.g. AAA). ',
+                'Notes at this path are also shown in the column. ',
+                'Leave empty to create "{key}.md" in the default location for new notes.',
+            )
+            if (path && !path.includes(NOTE_PATH_KEY_PLACEHOLDER)) {
+                desc.createDiv({ cls: 'mod-warning', text: `The path must contain ${NOTE_PATH_KEY_PLACEHOLDER}, otherwise it is ignored.` })
+            }
+            return desc
+        }
+        const notesPathSetting = new Setting(containerEl)
+            .setName('Path for new notes')
+            .setDesc(notesPathDesc(SettingsData.notesPath))
+        notesPathSetting.addText(text => text
+            .setPlaceholder('Example: Jira/{project}/{key}')
+            .setValue(SettingsData.notesPath)
+            .onChange(async value => {
+                SettingsData.notesPath = value.trim()
+                notesPathSetting.setDesc(notesPathDesc(SettingsData.notesPath))
+                await this.saveSettings({ isVisualOnly: true })
+            }))
+
+        new Setting(containerEl)
+            .setName('Template for new notes')
+            .setDesc('Note whose content is copied into new notes created with the ➕ button. Leave empty to create empty notes.')
+            .addText(text => text
+                .setPlaceholder('Example: Templates/Jira issue')
+                .setValue(SettingsData.notesTemplate)
+                .onChange(async value => {
+                    SettingsData.notesTemplate = value.trim()
+                    await this.saveSettings({ isVisualOnly: true })
                 }))
     }
 
