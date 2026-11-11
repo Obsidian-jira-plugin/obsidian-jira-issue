@@ -9,6 +9,8 @@ This fence component allows to insert a counter of the issues found as result of
 
 This component may be used to monitor the progress of a project or to display statistics on a dashboard note.
 
+With **Use 2025 search api** enabled for the account, the counter shows Jira Cloud's approximate count, which can lag behind recent changes for a short time.
+
 Example:
 ````
 ```jira-count

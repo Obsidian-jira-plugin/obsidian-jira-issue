@@ -6,7 +6,7 @@ jest.mock('../src/settings', () => ({
 jest.mock('../src/api/apiBase', () => ({ getIssue: jest.fn() }))
 jest.mock('../src/client/jiraClient', () => ({
     __esModule: true,
-    default: { getSearchResults: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve(true)) },
+    default: { getSearchResults: jest.fn(), getSearchCount: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve(true)) },
 }))
 jest.mock('../src/lastGoodCache', () => ({
     __esModule: true,
@@ -28,6 +28,7 @@ import { CountFenceRenderer } from '../src/rendering/countFenceRenderer'
 import RC from '../src/rendering/renderingCommon'
 import { SearchFenceRenderer } from '../src/rendering/searchFenceRenderer'
 import { TestAccountOpen } from './testData'
+import { SettingsData } from '../src/settings'
 
 function createFakeElement(options: any = {}): any {
     if (typeof options === 'string') {
@@ -57,6 +58,18 @@ function buildRootElement(): any {
 const settle = () => new Promise(resolve => setTimeout(resolve, 0))
 const chipIssue = (key: string) => ({ key, account: TestAccountOpen, fields: { summary: 'Summary', issuetype: { name: 'Task' }, status: { name: 'Done', statusCategory: { colorName: 'green' } } } })
 const getSearchResultsMock = JiraClient.getSearchResults as jest.Mock
+const getSearchCountMock = JiraClient.getSearchCount as jest.Mock
+
+// All texts rendered into the root element
+function renderedTexts(root: any): string[] {
+    const texts: string[] = []
+    const visit = (el: any) => {
+        if (el.textContent) texts.push(el.textContent)
+        for (const child of el.children || []) visit(child)
+    }
+    for (const call of root.replaceChildren.mock.calls) call.forEach(visit)
+    return texts
+}
 
 beforeAll(() => {
     (global as any).createDiv = (options: any) => createFakeElement(options)
@@ -77,7 +90,7 @@ afterEach(() => {
 
 describe('CountFenceRenderer', () => {
     test('a count Jira returned that cannot be rendered shows the error, not the saved count', async () => {
-        getSearchResultsMock.mockResolvedValueOnce({ total: undefined, issues: [], account: TestAccountOpen })
+        getSearchCountMock.mockResolvedValueOnce({ total: undefined, issues: [], account: TestAccountOpen })
 
         await CountFenceRenderer('project = AAA', buildRootElement(), null)
         await settle()
@@ -85,11 +98,11 @@ describe('CountFenceRenderer', () => {
         expect(RC.renderSearchError).toHaveBeenCalledTimes(1)
         expect(LastGoodCache.getCount).not.toHaveBeenCalled()
         expect(LastGoodCache.rememberCount).not.toHaveBeenCalled()
-        expect(ObjectsCache.get('project = AAA').isError).toEqual(false)
+        expect(ObjectsCache.get('count:project = AAA').isError).toEqual(false)
     })
 
     test('a failed fetch shows the saved count', async () => {
-        getSearchResultsMock.mockRejectedValueOnce(new Error('Timeout'))
+        getSearchCountMock.mockRejectedValueOnce(new Error('Timeout'))
         ;(LastGoodCache.getCount as jest.Mock).mockReturnValueOnce({ updateTime: 0, data: { total: 7, issues: [], account: TestAccountOpen } })
 
         await CountFenceRenderer('project = BBB', buildRootElement(), null)
@@ -97,11 +110,11 @@ describe('CountFenceRenderer', () => {
 
         expect(RC.renderStaleMarker).toHaveBeenCalledTimes(1)
         expect(RC.renderSearchError).not.toHaveBeenCalled()
-        expect(ObjectsCache.get('project = BBB').isError).toEqual(true)
+        expect(ObjectsCache.get('count:project = BBB').isError).toEqual(true)
     })
 
     test('a count that rendered stays shown when saving it fails', async () => {
-        getSearchResultsMock.mockResolvedValueOnce({ total: 3, issues: [], account: TestAccountOpen })
+        getSearchCountMock.mockResolvedValueOnce({ total: 3, issues: [], account: TestAccountOpen })
         ;(LastGoodCache.rememberCount as jest.Mock).mockImplementationOnce(() => { throw new Error('Cannot save') })
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
 
@@ -110,6 +123,40 @@ describe('CountFenceRenderer', () => {
 
         expect(RC.renderSearchError).not.toHaveBeenCalled()
         expect(warn).toHaveBeenCalledTimes(1)
+    })
+
+    test('renders the count of the account given in the block', async () => {
+        const account2025 = { ...TestAccountOpen, alias: 'Cloud', use2025Api: true }
+        SettingsData.accounts = [TestAccountOpen, account2025]
+        getSearchCountMock.mockResolvedValueOnce({ issues: [], total: 42, account: account2025 })
+        const root = buildRootElement()
+
+        try {
+            await CountFenceRenderer('query: project = ZZZ\naccount: Cloud', root, null)
+            await settle()
+        } finally {
+            SettingsData.accounts = undefined
+        }
+
+        expect(getSearchCountMock).toHaveBeenCalledWith('project = ZZZ', { account: account2025 })
+        expect(renderedTexts(root)).toContain('42')
+        expect(RC.renderSearchError).not.toHaveBeenCalled()
+    })
+})
+
+describe('jira-count and jira-search with the same query', () => {
+    test('do not use each other\'s cached results', async () => {
+        getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-1'), chipIssue('AAA-2')], isLast: true, account: TestAccountOpen })
+        getSearchCountMock.mockResolvedValueOnce({ issues: [], total: 2, account: TestAccountOpen })
+
+        await SearchFenceRenderer('type: LIST\nquery: project = SAME', buildRootElement(), null)
+        await settle()
+        await CountFenceRenderer('project = SAME', buildRootElement(), null)
+        await settle()
+
+        expect(getSearchCountMock).toHaveBeenCalledTimes(1)
+        expect((ObjectsCache.get('project = SAME').data as any).issues).toHaveLength(2)
+        expect((ObjectsCache.get('count:project = SAME').data as any).total).toEqual(2)
     })
 })
 
