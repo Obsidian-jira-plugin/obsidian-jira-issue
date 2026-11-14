@@ -32,6 +32,7 @@ const StoredSettings = {
     copyColumnTemplate: 'copyColumnTemplateVal',
     notesPath: 'notesPathVal',
     notesTemplate: 'notesTemplateVal',
+    dateFormat: 'dateFormatVal',
     inlineIssueUrlToTag: true,
     logImagesFetch: false,
     logRequestsResponses: true,
