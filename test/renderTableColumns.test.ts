@@ -7,7 +7,7 @@ jest.mock('../src/client/jiraClient', () => ({ __esModule: true, default: { getD
 
 import { getIssue } from '../src/api/apiBase'
 import JiraClient from '../src/client/jiraClient'
-import { formatCopyTemplate, hasCustomFieldColumnsByName, renderTableColumn, trimIssueForColumns } from '../src/rendering/renderTableColumns'
+import { dateToStr, formatCopyTemplate, hasCustomFieldColumnsByName, renderTableColumn, trimIssueForColumns } from '../src/rendering/renderTableColumns'
 import { SettingsData } from '../src/settings'
 import { ESearchColumnsTypes, ISearchColumn } from '../src/interfaces/settingsInterfaces'
 import { IJiraIssue, toDefaultedIssue } from '../src/interfaces/issueInterfaces'
@@ -324,6 +324,60 @@ describe('renderTableColumns', () => {
 
         test('is false without custom field columns', () => {
             expect(hasCustomFieldColumnsByName([{ type: ESearchColumnsTypes.KEY, compact: false, extra: '' }])).toEqual(false)
+        })
+    })
+    describe('date format', () => {
+        const originalFormat = SettingsData.dateFormat
+        afterEach(() => {
+            SettingsData.dateFormat = originalFormat
+        })
+
+        test('without a format, the date format of the system is used', () => {
+            SettingsData.dateFormat = ''
+            expect(dateToStr('2026-11-20T09:15:00.000')).toEqual(new Date(2026, 10, 20).toLocaleDateString())
+        })
+
+        test('without a format, a due date stays on its day in every time zone', () => {
+            SettingsData.dateFormat = ''
+            // new Date('2026-11-20') would be UTC midnight, the day before west of UTC
+            expect(dateToStr('2026-11-20')).toEqual(new Date(2026, 10, 20).toLocaleDateString())
+        })
+
+        test.each([
+            ['YYYY-MM-DD', '2026-11-20T09:15:00.000', '2026-11-20'],
+            ['DD.MM.YYYY HH:mm', '2026-11-20T09:15:00.000', '20.11.2026 09:15'],
+            // Due dates come without time
+            ['DD.MM.YYYY', '2026-11-20', '20.11.2026'],
+        ])('format %p turns %p into %p', (format, date, expected) => {
+            SettingsData.dateFormat = format
+            expect(dateToStr(date)).toEqual(expected)
+        })
+
+        test.each([undefined, null, ''])('an empty date %p stays empty', (date) => {
+            SettingsData.dateFormat = 'YYYY-MM-DD'
+            expect(dateToStr(date)).toEqual(date)
+        })
+
+        test.each(['YYYY-MM-DD', ''])('with format %p, an invalid date is shown as Jira returned it', (format) => {
+            SettingsData.dateFormat = format
+            const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
+            expect(dateToStr('not a date')).toEqual('not a date')
+            warn.mockRestore()
+        })
+
+        test('date columns of the table use the format, in the cell and in the compact tooltip', async () => {
+            SettingsData.dateFormat = 'DD.MM.YYYY'
+            const columns: ISearchColumn[] = [
+                { type: ESearchColumnsTypes.CREATED, compact: false },
+                { type: ESearchColumnsTypes.DUE_DATE, compact: true },
+            ]
+            const issue = { id: '1', key: 'AAA-1', fields: { created: '2026-11-20T09:15:00.000', duedate: '2026-12-01' }, account: TestAccountOpen } as unknown as IJiraIssue
+            const row = { cells: [] } as any
+
+            await renderTableColumn(columns, issue, row)
+
+            expect(row.cells[0].text).toEqual('20.11.2026')
+            expect(row.cells[1].title).toEqual('01.12.2026')
         })
     })
 })
