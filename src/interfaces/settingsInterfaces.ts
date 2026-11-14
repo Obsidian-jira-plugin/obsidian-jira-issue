@@ -55,6 +55,7 @@ export interface IJiraIssueSettings {
     inlineIssueUrlToTag: boolean
     inlineIssuePrefix: string
     copyColumnTemplate: string
+    dateFormat: string
     issueSummaryMaxWidthRem: number
     issueStatusMaxWidthRem: number
     animateOverflowingText: boolean

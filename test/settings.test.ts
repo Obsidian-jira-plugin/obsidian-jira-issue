@@ -30,6 +30,7 @@ const StoredSettings = {
     colorSchema: EColorSchema.LIGHT,
     inlineIssuePrefix: 'inlineIssuePrefixVal',
     copyColumnTemplate: 'copyColumnTemplateVal',
+    dateFormat: 'dateFormatVal',
     inlineIssueUrlToTag: true,
     logImagesFetch: false,
     logRequestsResponses: true,

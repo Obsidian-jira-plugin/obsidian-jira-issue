@@ -7,15 +7,22 @@ import JiraClient from "../client/jiraClient"
 import { AVATAR_RESOLUTION, ESearchColumnsTypes, ISearchColumn } from "../interfaces/settingsInterfaces"
 import { getIssue } from "../api/apiBase"
 import { SettingsData } from "../settings"
+import moment from "moment"
 
 const DESCRIPTION_COMPACT_MAX_LENGTH = 20
 
-function dateToStr(fullDate: string): string {
-    if (fullDate) {
-        const d = new Date(fullDate)
-        return d.toLocaleDateString()
+// Dates of the table columns. Without a configured format, the system's date format is used.
+// moment reads a date without time (e.g. a due date "2026-11-20") as local time, so it isn't
+// shifted to the day before in time zones west of UTC, as new Date() would do
+export function dateToStr(fullDate: string): string {
+    if (!fullDate) {
+        return fullDate
     }
-    return fullDate
+    const date = moment(fullDate)
+    if (!date.isValid()) {
+        return fullDate
+    }
+    return SettingsData.dateFormat ? date.format(SettingsData.dateFormat) : date.toDate().toLocaleDateString()
 }
 
 function deltaToStr(delta: number): string {
