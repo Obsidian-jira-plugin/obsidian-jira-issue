@@ -1,4 +1,5 @@
 import { App, Editor, EditorPosition, EditorSuggest, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from "obsidian"
+import { isInsideJiraSearchFence } from "./jiraSearchFence"
 
 interface SuggestionEntry {
     name: string
@@ -22,16 +23,8 @@ export class QuerySuggest extends EditorSuggest<SuggestionEntry> {
         if (!cursorLine.substring(0, cursor.ch).match(/^\s*query\s*:/)) {
             return null
         }
-        // check cursor inside jira-search fence
-        let jiraSearchFenceStartFound = false
-        for (let i = cursor.line - 1; i >= 0; i--) {
-            const line = editor.getLine(i)
-            if (line.match(/^\s*```\s*jira-search/)) {
-                jiraSearchFenceStartFound = true
-                break
-            }
-        }
-        if (!jiraSearchFenceStartFound) {
+        // check cursor inside an open jira-search fence
+        if (!isInsideJiraSearchFence(editor, cursor.line)) {
             return null
         }
 

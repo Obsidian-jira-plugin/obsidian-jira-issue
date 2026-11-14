@@ -1,6 +1,7 @@
 import { App, Editor, EditorPosition, EditorSuggest, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from "obsidian"
 import { COMPACT_SYMBOL, ESearchColumnsTypes } from "../interfaces/settingsInterfaces"
 import { SettingsData } from "../settings"
+import { isInsideJiraSearchFence } from "./jiraSearchFence"
 
 interface SuggestionEntry {
     name: string
@@ -27,16 +28,8 @@ export class ColumnsSuggest extends EditorSuggest<SuggestionEntry> {
             // console.log('!check cursor is after "columns:"')
             return null
         }
-        // check cursor inside jira-search fence
-        let jiraSearchFenceStartFound = false
-        for (let i = cursor.line - 1; i >= 0; i--) {
-            const line = editor.getLine(i)
-            if (line.match(/^\s*```\s*jira-search/)) {
-                jiraSearchFenceStartFound = true
-                break
-            }
-        }
-        if (!jiraSearchFenceStartFound) {
+        // check cursor inside an open jira-search fence
+        if (!isInsideJiraSearchFence(editor, cursor.line)) {
             // console.log('!check cursor inside jira-search fence')
             return null
         }
