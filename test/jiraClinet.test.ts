@@ -344,7 +344,7 @@ describe('JiraClient', () => {
             await Promise.resolve()
             expect(loaded).not.toHaveBeenCalled()
 
-            answer({ status: 200, headers: defaultHeaders, json: [] })
+            answer({ status: 200, headers: defaultHeaders, json: [{ id: 'summary', name: 'Summary', custom: false }] })
             expect(await JiraClient.customFieldsLoaded(TestAccountOpen)).toEqual(true)
             expect(loaded).toHaveBeenCalledWith(true)
         })
@@ -356,7 +356,7 @@ describe('JiraClient', () => {
                 cache: { ...TestAccountOpen.cache, customFieldsIdToName: {} as Record<string, string>, customFieldsNameToId: {} as Record<string, string>, customFieldsType: {} },
             })
             const forbidden = { status: 403, headers: defaultHeaders, json: {} } as any
-            const fields = { status: 200, headers: defaultHeaders, json: [{ custom: true, name: 'Team', schema: { customId: 10010 } }] } as any
+            const fields = { status: 200, headers: defaultHeaders, json: [{ id: 'customfield_10010', custom: true, name: 'Team', schema: { customId: 10010 } }] } as any
             const retryInterval = 60 * 1000
             const originalAccounts = SettingsData.accounts
             let consoleError: jest.SpyInstance
@@ -485,6 +485,20 @@ describe('JiraClient', () => {
                 expect(requestUrlMock).toHaveBeenCalledTimes(2)
             })
 
+            test('an answer that is not a field list keeps the earlier names', async () => {
+                const account = accountWithoutNames('notFields')
+                SettingsData.accounts = [account]
+                requestUrlMock
+                    .mockReturnValueOnce(fields)
+                    .mockReturnValueOnce({ status: 200, headers: defaultHeaders, json: { message: 'Please log in' } } as any)
+                await JiraClient.updateCustomFieldsCache()
+
+                await JiraClient.updateCustomFieldsCache()
+
+                expect(account.cache.customFieldsNameToId['Team']).toEqual('10010')
+                expect(await JiraClient.customFieldsLoaded(account)).toEqual(true)
+            })
+
             test('a field without a name is skipped', async () => {
                 const account = accountWithoutNames('noname')
                 SettingsData.accounts = [account]
@@ -587,6 +601,33 @@ describe('JiraClient', () => {
                 expect(await JiraClient.customFieldsLoaded(account)).toEqual(true)
             })
 
+            test('customFieldNamesKnown only after every account has its names', async () => {
+                const first = accountWithoutNames('knownFirst')
+                const second = accountWithoutNames('knownSecond')
+                SettingsData.accounts = [first, second]
+                let answerSecond: (response: unknown) => void
+                requestUrlMock
+                    .mockReturnValueOnce(fields)
+                    .mockReturnValueOnce(new Promise(resolve => { answerSecond = resolve }) as any)
+                const update = JiraClient.updateCustomFieldsCache()
+                await new Promise(resolve => setImmediate(resolve))
+
+                // Still loading
+                expect(JiraClient.customFieldNamesKnown()).toEqual(false)
+                answerSecond(forbidden)
+                await update
+                // The second account failed, e.g. offline
+                expect(JiraClient.customFieldNamesKnown()).toEqual(false)
+
+                requestUrlMock.mockReturnValueOnce(fields)
+                now += retryInterval
+                expect(await JiraClient.customFieldsLoaded(second)).toEqual(true)
+                expect(JiraClient.customFieldNamesKnown()).toEqual(true)
+
+                second.host = 'https://other.example.com'
+                expect(JiraClient.customFieldNamesKnown()).toEqual(false)
+            })
+
             test('an account without cache does not break the update', async () => {
                 const account = { ...TestAccountOpen, id: 'nocache', cache: undefined as any }
                 SettingsData.accounts = [account]
@@ -599,7 +640,7 @@ describe('JiraClient', () => {
 
         test('updateCustomFieldsCache populates virtual EPIC NAME mapping', async () => {
             SettingsData.accounts = [TestAccountOpen]
-            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: [] } as any)
+            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: [{ id: 'summary', name: 'Summary', custom: false }] } as any)
             await JiraClient.updateCustomFieldsCache()
             expect((TestAccountOpen.cache.customFieldsNameToId as any)['EPIC NAME']).toEqual('VIRTUAL_EPIC_NAME')
             expect((TestAccountOpen.cache.customFieldsIdToName as any)['VIRTUAL_EPIC_NAME']).toEqual('EPIC NAME')

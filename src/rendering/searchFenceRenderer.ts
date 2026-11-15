@@ -18,12 +18,15 @@ function getIssueTrimmer(searchView: SearchView): (issue: IJiraIssue) => IJiraIs
     return issue => trimIssueForColumns(issue, columns)
 }
 
-// Columns of custom fields given by name need the names loaded from Jira to find their field.
+// Columns of custom fields given by name need the names loaded from Jira to find their field
+function needsCustomFieldNames(searchView: SearchView): boolean {
+    return searchView.type !== ESearchResultsRenderingTypes.LIST && hasCustomFieldColumnsByName(searchView.getColumns())
+}
+
 // If the names could not be loaded, saving would drop those columns from the last good results
 function rememberSearch(searchView: SearchView, searchResults: IJiraSearchResults, generation: number): void {
     const save = () => LastGoodCache.rememberSearch(searchView.getSavedResultsKey(), searchResults, getIssueTrimmer(searchView), generation)
-    const needsNames = searchView.type !== ESearchResultsRenderingTypes.LIST && hasCustomFieldColumnsByName(searchView.getColumns())
-    if (!needsNames) {
+    if (!needsCustomFieldNames(searchView)) {
         save()
         return
     }
@@ -176,8 +179,13 @@ async function renderSearchView(rootEl: HTMLElement, searchView: SearchView): Pr
         RC.renderLoadingItem('Loading...')
         const generation = LastGoodCache.generation()
         JiraClient.getSearchResults(searchView.query, { limit: searchView.limit || SettingsData.searchResultsLimit, account: searchView.account })
-            .then(newSearchResults => {
+            .then(async newSearchResults => {
                 searchView.account = newSearchResults.account
+                // Names that failed to load (e.g. after an offline start) are loaded again before the table
+                // is drawn, otherwise their columns would stay empty until the next render
+                if (needsCustomFieldNames(searchView)) {
+                    await JiraClient.customFieldsLoaded(newSearchResults.account).catch(() => false)
+                }
                 const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
                 return renderSearchResultsOrError(rootEl, searchView, searchResults, () => rememberSearch(searchView, searchResults, generation))
             }, err => {

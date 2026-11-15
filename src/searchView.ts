@@ -2,6 +2,7 @@ import { COMMENT_REGEX, COMPACT_SYMBOL, ESearchColumnsTypes, ESearchResultsRende
 import { SettingsData } from "./settings"
 import { getAccountByAlias } from "./utils"
 import { VIRTUAL_CUSTOM_FIELD_ALIASES } from "./rendering/renderTableColumns"
+import JiraClient from "./client/jiraClient"
 
 export class SearchView {
     type: ESearchResultsRenderingTypes = ESearchResultsRenderingTypes.TABLE
@@ -76,7 +77,10 @@ export class SearchView {
                                     const knownCustomFields = SettingsData.cache.columns || []
                                     const isKnownAlias = VIRTUAL_CUSTOM_FIELD_ALIASES.includes(upperColumnExtra)
                                     const isKnownField = knownCustomFields.indexOf(upperColumnExtra) !== -1 || isKnownAlias
-                                    if (!isKnownField && knownCustomFields.length > 0) {
+                                    // Only when the names could be loaded: after a failed load (e.g. an offline start)
+                                    // the block must still render, so the saved results can be shown and the
+                                    // names loaded again
+                                    if (!isKnownField && JiraClient.customFieldNamesKnown()) {
                                         throw new Error(`Custom field ${columnExtra} not found`)
                                     }
                                 }

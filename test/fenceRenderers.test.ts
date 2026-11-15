@@ -6,7 +6,7 @@ jest.mock('../src/settings', () => ({
 jest.mock('../src/api/apiBase', () => ({ getIssue: jest.fn() }))
 jest.mock('../src/client/jiraClient', () => ({
     __esModule: true,
-    default: { getSearchResults: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve(true)) },
+    default: { getSearchResults: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve(true)), customFieldNamesKnown: jest.fn(() => false) },
 }))
 jest.mock('../src/lastGoodCache', () => ({
     __esModule: true,
@@ -161,13 +161,33 @@ describe('SearchFenceRenderer', () => {
 
     test('a table with a custom field column given by name is not saved when the field names could not be loaded', async () => {
         getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-4')], account: TestAccountOpen })
-        ;(JiraClient.customFieldsLoaded as jest.Mock).mockResolvedValueOnce(false)
+        // Before drawing the table and before saving it
+        ;(JiraClient.customFieldsLoaded as jest.Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(false)
 
         await SearchFenceRenderer('type: TABLE\nquery: project = FFF\ncolumns: KEY, $Team', buildRootElement(), null)
         await settle()
 
         expect(RC.renderSearchError).not.toHaveBeenCalled()
         expect(LastGoodCache.rememberSearch).not.toHaveBeenCalled()
+    })
+
+    test('field names that failed to load are loaded before the table is drawn', async () => {
+        const account = { ...TestAccountOpen, cache: { ...TestAccountOpen.cache, customFieldsNameToId: {} as Record<string, string> } }
+        const issue = { ...chipIssue('AAA-9'), account, fields: { ...chipIssue('AAA-9').fields, customfield_10010: 'Blue team' } }
+        getSearchResultsMock.mockResolvedValueOnce({ issues: [issue], account })
+        ;(JiraClient.customFieldsLoaded as jest.Mock).mockImplementationOnce(async () => {
+            account.cache.customFieldsNameToId = { Team: '10010' }
+            return true
+        })
+        const root = buildRootElement()
+
+        await SearchFenceRenderer('type: TABLE\nquery: project = NAMES\ncolumns: KEY, $Team', root, null)
+        await settle()
+
+        const texts: string[] = []
+        const visit = (el: any) => { if (el?.textContent) texts.push(el.textContent); (el?.children || []).forEach(visit) }
+        root.replaceChildren.mock.calls.forEach((call: any[]) => call.forEach(visit))
+        expect(texts).toContain('Blue team')
     })
 
     test('a table with a custom field column given by name is saved once the field names are loaded', async () => {

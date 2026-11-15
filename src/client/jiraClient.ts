@@ -322,6 +322,8 @@ interface ICustomFieldsState {
 // older set don't change names or column suggestions anymore once they finish
 let customFieldsStates = new Map<IJiraIssueAccountSettings, ICustomFieldsState>()
 let customFieldsUpdate: Promise<void> = Promise.resolve()
+// The set of the last full update that has finished, null while one is running
+let customFieldsSettled: Map<IJiraIssueAccountSettings, ICustomFieldsState> = null
 
 function hasCustomFieldNames(account: IJiraIssueAccountSettings): boolean {
     return Object.keys(account.cache?.customFieldsNameToId || {}).length > 0
@@ -329,6 +331,12 @@ function hasCustomFieldNames(account: IJiraIssueAccountSettings): boolean {
 
 // Builds the new maps first, so a response that can't be read leaves the names of an earlier load untouched
 function applyAccountCustomFields(account: IJiraIssueAccountSettings, response: IJiraField[]): void {
+    // A 200 answer that isn't a field list (e.g. from a proxy or login page) must not replace earlier names
+    // (sendRequest adds the account to every answer, which isn't part of the list)
+    const isField = ([key, field]: [string, unknown]) => key !== 'account' && !!field && typeof field === 'object' && 'id' in field
+    if (!Object.entries(response).some(isField)) {
+        throw new Error('The answer of /field contains no fields')
+    }
     const idToName: Record<string, string> = {}
     const nameToId: Record<string, string> = {}
     const types: Record<string, IJiraFieldSchema> = {}
@@ -430,6 +438,7 @@ async function updateAllCustomFields(states: Map<IJiraIssueAccountSettings, ICus
     if (states !== customFieldsStates) {
         return
     }
+    customFieldsSettled = states
     for (const column of ['EPIC NAME', 'EPIC LINK', 'PARENT', 'PARENT LINK']) {
         if (SettingsData.cache.columns.indexOf(column) === -1) {
             SettingsData.cache.columns.push(column)
@@ -545,11 +554,23 @@ export default {
     async updateCustomFieldsCache(): Promise<void> {
         const states = new Map<IJiraIssueAccountSettings, ICustomFieldsState>()
         customFieldsStates = states
+        customFieldsSettled = null
         customFieldsUpdate = updateAllCustomFields(states)
         await customFieldsUpdate
     },
 
     customFieldsLoaded,
+
+    // true when the custom field names of every account are known, so a name that isn't among them
+    // really doesn't exist. While they are loading, or after a failed load (e.g. offline), an unknown
+    // name may still be valid
+    customFieldNamesKnown(): boolean {
+        const states = customFieldsSettled
+        return states === customFieldsStates && SettingsData.accounts.every(account => {
+            const state = states.get(account)
+            return !!state && state.loaded && state.host === account.host
+        })
+    },
 
     // async updateJQLAutoCompleteCache(): Promise<void> {
     // const response = await sendRequest(
