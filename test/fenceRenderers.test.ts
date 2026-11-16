@@ -6,7 +6,7 @@ jest.mock('../src/settings', () => ({
 jest.mock('../src/api/apiBase', () => ({ getIssue: jest.fn() }))
 jest.mock('../src/client/jiraClient', () => ({
     __esModule: true,
-    default: { getSearchResults: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve(true)) },
+    default: { getSearchResults: jest.fn(), getApproximateCount: jest.fn(), customFieldsLoaded: jest.fn(() => Promise.resolve(true)) },
 }))
 jest.mock('../src/lastGoodCache', () => ({
     __esModule: true,
@@ -57,6 +57,7 @@ function buildRootElement(): any {
 const settle = () => new Promise(resolve => setTimeout(resolve, 0))
 const chipIssue = (key: string) => ({ key, account: TestAccountOpen, fields: { summary: 'Summary', issuetype: { name: 'Task' }, status: { name: 'Done', statusCategory: { colorName: 'green' } } } })
 const getSearchResultsMock = JiraClient.getSearchResults as jest.Mock
+const getApproximateCountMock = JiraClient.getApproximateCount as jest.Mock
 
 beforeAll(() => {
     (global as any).createDiv = (options: any) => createFakeElement(options)
@@ -110,6 +111,18 @@ describe('CountFenceRenderer', () => {
 
         expect(RC.renderSearchError).not.toHaveBeenCalled()
         expect(warn).toHaveBeenCalledTimes(1)
+    })
+
+    test('renders the count from the 2025 API, which has no total', async () => {
+        const account2025 = { ...TestAccountOpen, use2025Api: true }
+        getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-7')], isLast: true, account: account2025 })
+        getApproximateCountMock.mockResolvedValueOnce(42)
+
+        await CountFenceRenderer('project = ZZZ', buildRootElement(), null)
+        await settle()
+
+        const errorMessage = (RC.renderSearchError as jest.Mock).mock.calls[0]?.[1] ?? ''
+        expect(errorMessage).toEqual('')
     })
 })
 

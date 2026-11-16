@@ -205,6 +205,29 @@ describe('JiraClient', () => {
             expect(calledUrl).toContain(`projectKeyOrId=${projectKey}`)
             expect(calledUrl).toContain(`maxResults=${resultLimit}`)
         })
+
+        test('getSearchResults does not send a nextPageToken derived from offset with the 2025 API', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: { issues: [] } } as any)
+            const account2025 = { ...TestAccountOpen, use2025Api: true }
+
+            await JiraClient.getSearchResults('project = TEST', { offset: 20, account: account2025 })
+
+            const calledUrl = (requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam).url
+            expect(calledUrl).not.toContain('nextPageToken')
+        })
+
+        test('getApproximateCount posts the jql to the approximate-count endpoint', async () => {
+            requestUrlMock.mockReturnValue({ status: 200, headers: defaultHeaders, json: { count: 42 } } as any)
+            const account2025 = { ...TestAccountOpen, use2025Api: true }
+
+            const count = await JiraClient.getApproximateCount('project = TEST', { account: account2025 })
+
+            expect(count).toEqual(42)
+            const calledRequest = requestUrlMock.mock.calls[0][0] as obsidian.RequestUrlParam
+            expect(calledRequest.method).toEqual('POST')
+            expect(calledRequest.url).toContain('/search/approximate-count')
+            expect(calledRequest.body).toEqual(JSON.stringify({ jql: 'project = TEST' }))
+        })
     })
 
     describe('Negative tests', () => {
