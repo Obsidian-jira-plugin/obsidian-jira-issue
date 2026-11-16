@@ -57,6 +57,7 @@ export interface IJiraIssueSettings {
     copyColumnTemplate: string
     notesPath: string
     notesTemplate: string
+    dateFormat: string
     issueSummaryMaxWidthRem: number
     issueStatusMaxWidthRem: number
     animateOverflowingText: boolean

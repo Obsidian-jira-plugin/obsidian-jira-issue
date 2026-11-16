@@ -63,6 +63,19 @@ The template can span multiple lines and supports these placeholders: `{prefix}`
 
 If this field is kept empty, the default value is used.
 
+## Date format
+
+This setting defines how dates are shown in `jira-search` tables: the columns `CREATED`, `UPDATED`, `DUE_DATE`, `RESOLUTION_DATE` and `LAST_VIEWED`, also in the tooltip of compact columns. It uses [moment.js format tokens](https://momentjs.com/docs/#/displaying/format/). The settings show an example of the current format while you type.
+
+| Format | Example |
+| :--- | :--- |
+| `YYYY-MM-DD` | `2026-11-20` |
+| `DD.MM.YYYY` | `20.11.2026` |
+| `DD.MM.YYYY HH:mm` | `20.11.2026 09:15` |
+| `MMM D, YYYY` | `Nov 20, 2026` |
+
+If this field is kept empty, the date format of your system is used.
+
 ## Issue summary maximum width
 
 This setting limits the width of issue summaries in tags. The value is expressed in `rem` and defaults to `20`.

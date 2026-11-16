@@ -1,3 +1,4 @@
+import moment from 'moment'
 import { App, Notice, PluginSettingTab, Setting, TextComponent, WorkspaceLeaf } from 'obsidian'
 import JiraClient from './client/jiraClient'
 import { COLOR_SCHEMA_DESCRIPTION, CREDENTIAL_STORAGE_TYPE_DESCRIPTION, EAuthenticationTypes, EColorSchema, ECredentialStorageType, ERenderStyle, RENDER_STYLE_DESCRIPTION, ESearchColumnsTypes, IJiraIssueAccountSettings, IJiraIssueSettings, SEARCH_COLUMNS_DESCRIPTION } from './interfaces/settingsInterfaces'
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: IJiraIssueSettings = {
     copyColumnTemplate: '{prefix}{key}',
     notesPath: '',
     notesTemplate: '',
+    dateFormat: '',
     issueSummaryMaxWidthRem: 20,
     issueStatusMaxWidthRem: 2,
     animateOverflowingText: false,
@@ -710,6 +712,26 @@ export class JiraIssueSettingTab extends PluginSettingTab {
                     inlineIssuePrefixSetting.setDesc(inlineIssuePrefixDesc(SettingsData.inlineIssuePrefix))
                     await this.saveSettings({ isVisualOnly: true })
                 }))
+
+        const dateFormatDesc = (format: string) => {
+            const desc = createFragment()
+            desc.append('Format of the dates in jira-search tables, using ')
+            desc.createEl('a', { text: 'moment.js format tokens', href: 'https://momentjs.com/docs/#/displaying/format/' })
+            desc.append('. Leave empty to use the date format of your system.')
+            desc.createDiv({ text: format ? `Example: ${moment().format(format)}` : `Example: ${new Date().toLocaleDateString()}` })
+            return desc
+        }
+        const dateFormatSetting = new Setting(containerEl)
+            .setName('Date format')
+            .setDesc(dateFormatDesc(SettingsData.dateFormat))
+        dateFormatSetting.addText(text => text
+            .setPlaceholder('Example: YYYY-MM-DD')
+            .setValue(SettingsData.dateFormat)
+            .onChange(async value => {
+                SettingsData.dateFormat = value
+                dateFormatSetting.setDesc(dateFormatDesc(SettingsData.dateFormat))
+                await this.saveSettings({ isVisualOnly: true })
+            }))
 
         new Setting(containerEl)
             .setName('Copy column template')
