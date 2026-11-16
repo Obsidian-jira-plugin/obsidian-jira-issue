@@ -13,6 +13,7 @@ interface RequestOptions {
     queryParameters2025?: URLSearchParams
     account?: IJiraIssueAccountSettings
     noBasePath?: boolean
+    body?: string
 }
 
 function getMimeType(imageBuffer: ArrayBuffer): string {
@@ -223,6 +224,7 @@ async function sendRequestWithAccount(account: IJiraIssueAccountSettings, reques
         url: buildUrl(account.host, requestOptions, account.use2025Api),
         headers: buildHeaders(account),
         contentType: 'application/json',
+        body: requestOptions.body,
     }
     try {
         response = await requestUrlWithTimeout(requestUrlParam)
@@ -395,6 +397,23 @@ function retryAccountCustomFields(account: IJiraIssueAccountSettings, accountsWi
     return retry
 }
 
+// The 2025 search API (/search/jql) does not return a total, unlike the deprecated /search.
+// Jira Cloud's approximate-count endpoint is the replacement for getting a count on its own
+async function fetchApproximateCount(query: string, account: IJiraIssueAccountSettings): Promise<number> {
+    const result = await sendRequest(
+        {
+            method: 'POST',
+            path: '/search/approximate-count',
+            account: account,
+            body: JSON.stringify({ jql: query }),
+        }
+    ) as { count?: number }
+    if (typeof result.count !== 'number') {
+        throw new Error('Jira did not return the number of issues')
+    }
+    return result.count
+}
+
 export default {
 
     async getIssue(issueKey: string, options: { fields?: string[], account?: IJiraIssueAccountSettings } = {}): Promise<IJiraIssue> {
@@ -430,10 +449,11 @@ export default {
             startAt: opt.offset > 0 ? opt.offset.toString() : '',
             maxResults: opt.limit > 0 ? opt.limit.toString() : '',
         })
+        // nextPageToken is an opaque string Jira returns with a previous page, not derivable
+        // from a numeric offset, so offset is not supported with the 2025 search API
         const queryParameters2025 = new URLSearchParams({
             jql: query,
             fields: opt.fields.join(','),
-            nextPageToken: opt.offset > 0 ? opt.offset.toString() : '',
             maxResults: opt.limit > 0 ? opt.limit.toString() : '',
         })
         const searchResults = await sendRequest(
@@ -451,6 +471,33 @@ export default {
             await fetchIssueImages(issue)
         }
         return searchResults
+    },
+
+    // Number of issues matching the query, as search results without issues (total and account).
+    // A known account with the 2025 API is asked for the count directly. Otherwise a search for
+    // one key finds the account that answers, and with the 2025 API the count is asked after it
+    async getSearchCount(query: string, options: { account?: IJiraIssueAccountSettings } = {}): Promise<IJiraSearchResults> {
+        const account = options.account || (SettingsData.accounts.length === 1 ? SettingsData.accounts[0] : null)
+        if (account?.use2025Api) {
+            return { issues: [], total: await fetchApproximateCount(query, account), account }
+        }
+        const searchResults = await sendRequest(
+            {
+                method: 'GET',
+                path: '/search',
+                path2025: '/search/jql',
+                queryParameters: new URLSearchParams({ jql: query, fields: 'key', maxResults: '1' }),
+                account: account,
+            }
+        ) as IJiraSearchResults
+        let total = searchResults.total
+        if (total === undefined && searchResults.account?.use2025Api) {
+            total = await fetchApproximateCount(query, searchResults.account)
+        }
+        if (typeof total !== 'number') {
+            throw new Error('Jira did not return the number of issues')
+        }
+        return { issues: [], total, account: searchResults.account }
     },
 
     async updateStatusColorCache(status: string, account: IJiraIssueAccountSettings): Promise<void> {

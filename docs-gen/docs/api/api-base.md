@@ -34,6 +34,20 @@ Execute a JQL query to get all the matching issues.
 
 Return value type: [`Promise<IJiraSearchResults>`](https://github.com/marc0l92/obsidian-jira-issue/blob/master/src/interfaces/issueInterfaces.ts#L107-L113)
 
+With **Use 2025 search api** enabled for the account, Jira doesn't return `total` in the search results. Use [getSearchCount](#getSearchCount) to get the number of matching issues.
+
+## getSearchCount
+- `$ji.base.getSearchCount(query: string, options: { account?: IJiraIssueAccountSettings } = {})`
+
+Get the number of issues matching a JQL query, without loading the issues. Works with both search APIs. With **Use 2025 search api**, the number comes from Jira Cloud's approximate count, which can lag behind recent changes for a short time.
+
+| Parameter | Required | Type | Default value | Description |
+|-|-|-|-|-|
+| query | True | `string` | - | JQL query to count the issues |
+| options.account | False | `IJiraIssueAccountSettings` | Automatically detect | Jira account to use. Use the [util api](/docs/api/api-util) to retrieve an account object. |
+
+Return value type: `Promise<number>`
+
 ## getDevStatus
 - `$ji.base.getDevStatus(issueId: string, options: { account?: IJiraIssueAccountSettings } = {})`
 
