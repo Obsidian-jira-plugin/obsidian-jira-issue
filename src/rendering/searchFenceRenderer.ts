@@ -107,7 +107,7 @@ async function renderSearchResultsTableBody(table: HTMLElement, searchView: Sear
         issue = toDefaultedIssue(issue)
         const row = createEl('tr', { parent: tbody })
         const columns = searchView.getColumns()
-        await renderTableColumn(columns, issue, row, offline)
+        await renderTableColumn(columns, issue, row, offline, searchView.sourcePath)
     }
 }
 
@@ -190,7 +190,9 @@ async function renderSearchView(rootEl: HTMLElement, searchView: SearchView): Pr
 export const SearchFenceRenderer = async (source: string, rootEl: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> => {
     // console.log(`Search query: ${source}`)
     try {
-        await renderSearchView(rootEl, SearchView.fromString(source))
+        const searchView = SearchView.fromString(source)
+        searchView.sourcePath = ctx?.sourcePath || ''
+        await renderSearchView(rootEl, searchView)
     } catch (err) {
         RC.renderSearchError(rootEl, err, null)
     }
