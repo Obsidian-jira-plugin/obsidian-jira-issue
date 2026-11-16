@@ -321,7 +321,6 @@ interface ICustomFieldsState {
 // One entry per account, replaced as a whole when a full update starts. Loads started for an
 // older set don't change names or column suggestions anymore once they finish
 let customFieldsStates = new Map<IJiraIssueAccountSettings, ICustomFieldsState>()
-let customFieldsUpdate: Promise<void> = Promise.resolve()
 // The set of the last full update that has finished, null while one is running
 let customFieldsSettled: Map<IJiraIssueAccountSettings, ICustomFieldsState> = null
 
@@ -428,17 +427,21 @@ function loadAccountCustomFields(account: IJiraIssueAccountSettings, states: Map
 async function updateAllCustomFields(states: Map<IJiraIssueAccountSettings, ICustomFieldsState>): Promise<void> {
     SettingsData.cache.columns = []
     for (const account of SettingsData.accounts) {
-        if (states !== customFieldsStates) {
-            // A newer full update loads all accounts again
-            return
-        }
         states.set(account, { loaded: hasCustomFieldNames(account), loading: null, lastAttempt: 0, host: account.host })
-        await loadAccountCustomFields(account, states)
     }
+    // In parallel, so an account that is slow or unreachable (until the request timeout) doesn't hold up the others
+    await Promise.all(SettingsData.accounts.map(account => loadAccountCustomFields(account, states)))
     if (states !== customFieldsStates) {
         return
     }
     customFieldsSettled = states
+    // The loads add their suggestions as they finish. In account order, they stay the same from one start to the next
+    SettingsData.cache.columns = []
+    for (const account of SettingsData.accounts) {
+        if (states.get(account).loaded) {
+            addColumnSuggestions(account)
+        }
+    }
     for (const column of ['EPIC NAME', 'EPIC LINK', 'PARENT', 'PARENT LINK']) {
         if (SettingsData.cache.columns.indexOf(column) === -1) {
             SettingsData.cache.columns.push(column)
@@ -451,14 +454,25 @@ async function updateAllCustomFields(states: Map<IJiraIssueAccountSettings, ICus
 // Callers have just had an answer from Jira, so names that failed before are loaded again,
 // at most once per CUSTOM_FIELDS_RETRY_INTERVAL_MS
 async function customFieldsLoaded(account: IJiraIssueAccountSettings): Promise<boolean> {
-    // A full update started while waiting replaces the result of the one waited for
+    if (!account) {
+        return true
+    }
+    // Only the load of this account is waited for, not those of the other accounts.
+    // A full update started while waiting replaces the result of the load waited for
     let states: Map<IJiraIssueAccountSettings, ICustomFieldsState>
-    do {
+    let state: ICustomFieldsState
+    for (;;) {
         states = customFieldsStates
-        await customFieldsUpdate
-    } while (states !== customFieldsStates)
+        state = states.get(account)
+        if (!state?.loading) {
+            break
+        }
+        await state.loading
+        if (states === customFieldsStates) {
+            break
+        }
+    }
 
-    const state = account ? states.get(account) : null
     if (!state) {
         return true
     }
@@ -555,8 +569,7 @@ export default {
         const states = new Map<IJiraIssueAccountSettings, ICustomFieldsState>()
         customFieldsStates = states
         customFieldsSettled = null
-        customFieldsUpdate = updateAllCustomFields(states)
-        await customFieldsUpdate
+        await updateAllCustomFields(states)
     },
 
     customFieldsLoaded,

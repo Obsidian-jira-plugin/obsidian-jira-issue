@@ -171,6 +171,25 @@ describe('SearchFenceRenderer', () => {
         expect(LastGoodCache.rememberSearch).not.toHaveBeenCalled()
     })
 
+    test('a table waits at most 3 seconds for field names that do not come', async () => {
+        jest.useFakeTimers()
+        try {
+            getSearchResultsMock.mockResolvedValueOnce({ issues: [chipIssue('AAA-8')], account: TestAccountOpen })
+            ;(JiraClient.customFieldsLoaded as jest.Mock).mockImplementationOnce(() => new Promise(() => null))
+            const root = buildRootElement()
+
+            await SearchFenceRenderer('type: TABLE\nquery: project = SLOW\ncolumns: KEY, $Team', root, null)
+            await jest.advanceTimersByTimeAsync(2999)
+            expect(root.replaceChildren).not.toHaveBeenCalled()
+
+            await jest.advanceTimersByTimeAsync(1)
+            expect(root.replaceChildren).toHaveBeenCalled()
+            expect(RC.renderSearchError).not.toHaveBeenCalled()
+        } finally {
+            jest.useRealTimers()
+        }
+    })
+
     test('field names that failed to load are loaded before the table is drawn', async () => {
         const account = { ...TestAccountOpen, cache: { ...TestAccountOpen.cache, customFieldsNameToId: {} as Record<string, string> } }
         const issue = { ...chipIssue('AAA-9'), account, fields: { ...chipIssue('AAA-9').fields, customfield_10010: 'Blue team' } }

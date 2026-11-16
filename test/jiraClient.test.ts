@@ -524,23 +524,86 @@ describe('JiraClient', () => {
                 expect(requestUrlMock).toHaveBeenCalledTimes(1)
             })
 
-            test('a replaced full update stops loading the remaining accounts', async () => {
+            test('loads of a replaced full update change nothing when they finish', async () => {
                 const first = accountWithoutNames('first')
                 const second = accountWithoutNames('second')
                 SettingsData.accounts = [first, second]
-                let answerFirst: (response: unknown) => void
-                requestUrlMock.mockReturnValueOnce(new Promise(resolve => { answerFirst = resolve }) as any)
+                const answers: ((response: unknown) => void)[] = []
+                requestUrlMock
+                    .mockReturnValueOnce(new Promise(resolve => answers.push(resolve)) as any)
+                    .mockReturnValueOnce(new Promise(resolve => answers.push(resolve)) as any)
                 void JiraClient.updateCustomFieldsCache()
                 await new Promise(resolve => setImmediate(resolve))
 
                 requestUrlMock.mockReturnValueOnce(fields).mockReturnValueOnce(fields)
                 const newer = JiraClient.updateCustomFieldsCache()
-                answerFirst(fields)
+                answers.forEach(answer => answer(fields))
                 await newer
                 await new Promise(resolve => setImmediate(resolve))
 
-                expect(requestUrlMock).toHaveBeenCalledTimes(3)
+                expect(requestUrlMock).toHaveBeenCalledTimes(4)
+                // Once per account, from the newer update only
                 expect(SettingsData.cache.columns.filter(c => c === 'TEAM')).toHaveLength(2)
+            })
+
+            test('the accounts load their names in parallel', async () => {
+                const slow = accountWithoutNames('slow')
+                const fast = accountWithoutNames('fast')
+                SettingsData.accounts = [slow, fast]
+                let answerSlow: (response: unknown) => void
+                requestUrlMock
+                    .mockReturnValueOnce(new Promise(resolve => { answerSlow = resolve }) as any)
+                    .mockReturnValueOnce(fields)
+
+                const update = JiraClient.updateCustomFieldsCache()
+                await new Promise(resolve => setImmediate(resolve))
+
+                // Both requests started, the second one doesn't wait for the first
+                expect(requestUrlMock).toHaveBeenCalledTimes(2)
+                expect(fast.cache.customFieldsNameToId['Team']).toEqual('10010')
+                answerSlow(forbidden)
+                await update
+            })
+
+            test('column suggestions are in account order, whichever account answers first', async () => {
+                const first = accountWithoutNames('orderFirst')
+                const second = accountWithoutNames('orderSecond')
+                SettingsData.accounts = [first, second]
+                let answerFirst: (response: unknown) => void
+                requestUrlMock
+                    .mockReturnValueOnce(new Promise(resolve => { answerFirst = resolve }) as any)
+                    .mockReturnValueOnce({ ...fields, json: [{ id: 'customfield_20020', custom: true, name: 'Squad', schema: { customId: 20020 } }] })
+                const update = JiraClient.updateCustomFieldsCache()
+                await new Promise(resolve => setImmediate(resolve))
+                answerFirst(fields)
+                await update
+
+                const columns = SettingsData.cache.columns
+                expect(columns.indexOf('TEAM')).toBeLessThan(columns.indexOf('SQUAD'))
+                expect(columns.filter(c => c === 'TEAM')).toHaveLength(1)
+            })
+
+            test('customFieldsLoaded of an account does not wait for a slow other account', async () => {
+                const slow = accountWithoutNames('slowOther')
+                const fast = accountWithoutNames('fastOther')
+                SettingsData.accounts = [slow, fast]
+                let answerSlow: (response: unknown) => void
+                requestUrlMock
+                    .mockReturnValueOnce(new Promise(resolve => { answerSlow = resolve }) as any)
+                    .mockReturnValueOnce(fields)
+                const update = JiraClient.updateCustomFieldsCache()
+
+                const result = await Promise.race([
+                    JiraClient.customFieldsLoaded(fast),
+                    new Promise(resolve => setTimeout(() => resolve('still waiting'), 50)),
+                ])
+
+                expect(result).toEqual(true)
+                // The names of all accounts are only known once the slow one has answered
+                expect(JiraClient.customFieldNamesKnown()).toEqual(false)
+                answerSlow(fields)
+                await update
+                expect(JiraClient.customFieldNamesKnown()).toEqual(true)
             })
 
             test('a retry replaced by a successful full update counts its result', async () => {
