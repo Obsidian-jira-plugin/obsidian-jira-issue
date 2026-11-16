@@ -2,12 +2,14 @@ jest.mock('../src/settings', () => {
     return { SettingsData: { cache: { columns: ['CUSTOM1', '12345', 'EPIC NAME'] } } }
 })
 jest.mock('../src/utils', () => { return { getAccountByAlias: jest.fn() } })
+jest.mock('../src/client/jiraClient', () => ({ __esModule: true, default: { customFieldNamesKnown: jest.fn(() => true) } }))
 
 import { COMPACT_SYMBOL, ESearchColumnsTypes, ESearchResultsRenderingTypes } from '../src/interfaces/settingsInterfaces'
 import { SearchView } from '../src/searchView'
 import { SettingsData } from '../src/settings'
 import { TestAccountOpen } from './testData'
 import * as Utils from '../src/utils'
+import JiraClient from '../src/client/jiraClient'
 
 const kQuery = `status = 'In Progress' order by priority DESC`
 const kLimit = 10
@@ -184,6 +186,13 @@ account: ${TestAccountOpen.alias}`)
     limit: ${kLimit}
     columns: ${kColumns}, $${kInvalidCustomColumn},`))
                     .toThrow(new Error(`Custom field ${kInvalidCustomColumn} not found`))
+            })
+            test('Custom columns are not rejected while the field names are unknown', () => {
+                // e.g. after an offline start: the block must render to show the saved results
+                ;(JiraClient.customFieldNamesKnown as jest.Mock).mockReturnValueOnce(false)
+                const sv = SearchView.fromString(`query: ${kQuery}
+    columns: KEY, $${kInvalidCustomColumn}`)
+                expect(sv.columns[1]).toEqual({ type: ESearchColumnsTypes.CUSTOM_FIELD, compact: false, extra: kInvalidCustomColumn })
             })
             test('Legacy compact column not supported', () => {
                 expect(() => SearchView.fromString(`type: ${kType}

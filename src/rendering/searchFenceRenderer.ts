@@ -18,12 +18,28 @@ function getIssueTrimmer(searchView: SearchView): (issue: IJiraIssue) => IJiraIs
     return issue => trimIssueForColumns(issue, columns)
 }
 
-// Columns of custom fields given by name need the names loaded from Jira to find their field.
+// A table waits at most this long for custom field names that failed to load before it's drawn, so a
+// Jira that doesn't answer /field (until the request timeout) doesn't hold back results that have arrived
+const MAX_WAIT_FOR_FIELD_NAMES_MS = 3000
+
+async function waitForCustomFieldNames(account: IJiraIssueAccountSettings): Promise<void> {
+    let timer: ReturnType<typeof setTimeout>
+    await Promise.race([
+        JiraClient.customFieldsLoaded(account).catch(() => false),
+        new Promise(resolve => { timer = setTimeout(resolve, MAX_WAIT_FOR_FIELD_NAMES_MS) }),
+    ])
+    clearTimeout(timer)
+}
+
+// Columns of custom fields given by name need the names loaded from Jira to find their field
+function needsCustomFieldNames(searchView: SearchView): boolean {
+    return searchView.type !== ESearchResultsRenderingTypes.LIST && hasCustomFieldColumnsByName(searchView.getColumns())
+}
+
 // If the names could not be loaded, saving would drop those columns from the last good results
 function rememberSearch(searchView: SearchView, searchResults: IJiraSearchResults, generation: number): void {
     const save = () => LastGoodCache.rememberSearch(searchView.getSavedResultsKey(), searchResults, getIssueTrimmer(searchView), generation)
-    const needsNames = searchView.type !== ESearchResultsRenderingTypes.LIST && hasCustomFieldColumnsByName(searchView.getColumns())
-    if (!needsNames) {
+    if (!needsCustomFieldNames(searchView)) {
         save()
         return
     }
@@ -176,8 +192,13 @@ async function renderSearchView(rootEl: HTMLElement, searchView: SearchView): Pr
         RC.renderLoadingItem('Loading...')
         const generation = LastGoodCache.generation()
         JiraClient.getSearchResults(searchView.query, { limit: searchView.limit || SettingsData.searchResultsLimit, account: searchView.account })
-            .then(newSearchResults => {
+            .then(async newSearchResults => {
                 searchView.account = newSearchResults.account
+                // Names that failed to load (e.g. after an offline start) are loaded again before the table
+                // is drawn, otherwise their columns would stay empty until the next render
+                if (needsCustomFieldNames(searchView)) {
+                    await waitForCustomFieldNames(newSearchResults.account)
+                }
                 const searchResults = ObjectsCache.add(searchView.getCacheKey(), newSearchResults).data as IJiraSearchResults
                 return renderSearchResultsOrError(rootEl, searchView, searchResults, () => rememberSearch(searchView, searchResults, generation))
             }, err => {
