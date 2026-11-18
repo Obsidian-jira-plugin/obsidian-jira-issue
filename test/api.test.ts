@@ -156,6 +156,19 @@ describe('API', () => {
         })
     })
 
+    describe('util', () => {
+        test('parseSearchView reads a jira-search block', () => {
+            const view = API.util.parseSearchView(`type: TABLE\n# comment\nquery: ${kSearchQuery}\nlimit: 20`)
+
+            expect(view.query).toEqual(kSearchQuery)
+            expect(view.limit).toEqual(20)
+        })
+        test('parseSearchView throws the block errors', () => {
+            expect(() => API.util.parseSearchView(`querry: ${kSearchQuery}\nlimit: 20`)).toThrow('Invalid key: querry')
+            expect(() => API.util.parseSearchView(`query: ${kSearchQuery}\nlimit: abc`)).toThrow('Invalid limit: abc')
+        })
+    })
+
     afterEach(() => {
         jest.clearAllMocks()
     })

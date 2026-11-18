@@ -1,5 +1,6 @@
 import { getAccountByAlias, getAccountByHost } from "../utils"
 import ObjectsCache from "../objectsCache"
+import { SearchView } from "../searchView"
 import { getActiveSprint, getActiveSprintName, getVelocity, getWorkLogByDates, getWorkLogBySprint, getWorkLogBySprintId, getWorkLogSeriesByUser } from "./apiMacro"
 import { getDefaultedSearchResults, getIssueDefaulted } from "./apiDefaulted"
 import { getWorklogPerDay, getWorklogPerUser } from "./apiChart"
@@ -37,7 +38,8 @@ const API = {
         getAccountByHost: getAccountByHost,
     },
     util: {
-        clearCache: ObjectsCache.clear
+        clearCache: ObjectsCache.clear,
+        parseSearchView: (text: string): SearchView => SearchView.fromString(text),
     },
 }
 
