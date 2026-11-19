@@ -39,7 +39,11 @@ const API = {
     },
     util: {
         clearCache: ObjectsCache.clear,
-        parseSearchView: (text: string): SearchView => SearchView.fromString(text),
+        parseSearchView: (text: string): Pick<SearchView, 'type' | 'query' | 'limit' | 'columns' | 'account' | 'label'> => {
+            // Plain object, so SearchView's internals (cache key, sourcePath, ...) stay out of the public API
+            const { type, query, limit, columns, account, label } = SearchView.fromString(text)
+            return { type, query, limit, columns, account, label }
+        },
     },
 }
 

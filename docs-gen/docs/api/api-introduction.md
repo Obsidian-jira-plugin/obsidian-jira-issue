@@ -84,3 +84,4 @@ This category contains functions to access the accounts data stored in the Obsid
 This category contains generic functions.
 
 - [`$ji.util.clearCache()`](/docs/api/api-util#clearCache)
+- [`$ji.util.parseSearchView(text: string)`](/docs/api/api-util#parseSearchView)

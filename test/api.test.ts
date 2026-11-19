@@ -18,6 +18,7 @@ jest.mock('../src/objectsCache', () => {
 import ObjectsCache from "../src/objectsCache"
 import API from "../src/api/api"
 import JiraClient from "../src/client/jiraClient"
+import { SearchView } from "../src/searchView"
 
 const kIssueKey = 'AAA-123'
 const kIssue = { key: kIssueKey }
@@ -160,8 +161,8 @@ describe('API', () => {
         test('parseSearchView reads a jira-search block', () => {
             const view = API.util.parseSearchView(`type: TABLE\n# comment\nquery: ${kSearchQuery}\nlimit: 20`)
 
-            expect(view.query).toEqual(kSearchQuery)
-            expect(view.limit).toEqual(20)
+            expect(view).toEqual({ type: 'TABLE', query: kSearchQuery, limit: 20, columns: [], account: null, label: null })
+            expect(view).not.toBeInstanceOf(SearchView)
         })
         test('parseSearchView throws the block errors', () => {
             expect(() => API.util.parseSearchView(`querry: ${kSearchQuery}\nlimit: 20`)).toThrow('Invalid key: querry')
