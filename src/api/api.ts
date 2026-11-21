@@ -1,5 +1,6 @@
 import { getAccountByAlias, getAccountByHost } from "../utils"
 import ObjectsCache from "../objectsCache"
+import { SearchView } from "../searchView"
 import { getActiveSprint, getActiveSprintName, getVelocity, getWorkLogByDates, getWorkLogBySprint, getWorkLogBySprintId, getWorkLogSeriesByUser } from "./apiMacro"
 import { getDefaultedSearchResults, getIssueDefaulted } from "./apiDefaulted"
 import { getWorklogPerDay, getWorklogPerUser } from "./apiChart"
@@ -37,7 +38,12 @@ const API = {
         getAccountByHost: getAccountByHost,
     },
     util: {
-        clearCache: ObjectsCache.clear
+        clearCache: ObjectsCache.clear,
+        parseSearchView: (text: string): Pick<SearchView, 'type' | 'query' | 'limit' | 'columns' | 'account' | 'label'> => {
+            // Plain object, so SearchView's internals (cache key, sourcePath, ...) stay out of the public API
+            const { type, query, limit, columns, account, label } = SearchView.fromString(text)
+            return { type, query, limit, columns, account, label }
+        },
     },
 }
 
